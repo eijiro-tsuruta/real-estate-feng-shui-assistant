@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="720" viewBox="0 0 900 720" role="img" aria-labelledby="title desc">
+  <title id="title">サンプル2LDK間取り図</title>
+  <desc id="desc">北側に玄関、南側にLDKとバルコニーを配置したサンプル間取り</desc>
+  <rect width="900" height="720" fill="#f7f4ec"/>
+  <g fill="none" stroke="#173b35" stroke-width="8">
+    <rect x="90" y="65" width="720" height="570" fill="#fffef9"/>
+    <path d="M90 275h720M395 65v210M585 65v210M90 475h305M585 275v200M395 475v160"/>
+    <path d="M585 395h225M705 275v120"/>
+  </g>
+  <g fill="#e8f0eb">
+    <rect x="98" y="283" width="479" height="184"/>
+    <rect x="403" y="483" width="399" height="144"/>
+    <rect x="98" y="483" width="289" height="144"/>
+  </g>
+  <g font-family="'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif" fill="#173b35" text-anchor="middle">
+    <text x="242" y="150" font-size="28" font-weight="700">洋室 1</text>
+    <text x="242" y="190" font-size="18">6.0帖</text>
+    <text x="490" y="150" font-size="24" font-weight="700">玄関</text>
+    <text x="697" y="145" font-size="26" font-weight="700">洋室 2</text>
+    <text x="697" y="185" font-size="18">5.2帖</text>
+    <text x="330" y="360" font-size="31" font-weight="700">LDK</text>
+    <text x="330" y="405" font-size="20">14.5帖</text>
+    <text x="645" y="330" font-size="22" font-weight="700">キッチン</text>
+    <text x="645" y="440" font-size="20" font-weight="700">トイレ</text>
+    <text x="242" y="550" font-size="22" font-weight="700">バルコニー</text>
+    <text x="490" y="550" font-size="20" font-weight="700">洗面室</text>
+    <text x="695" y="550" font-size="20" font-weight="700">浴室</text>
+  </g>
+  <g transform="translate(825 78)" stroke="#b38c4f" fill="none" stroke-width="4">
+    <circle r="38" fill="#fffef9"/>
+    <path d="M0 26V-25M0-25l-12 18M0-25L12-7"/>
+    <text x="0" y="-48" stroke="none" fill="#b38c4f" text-anchor="middle" font-family="Georgia,serif" font-size="20">N</text>
+  </g>
+  <text x="450" y="690" fill="#789388" text-anchor="middle" font-family="'Yu Gothic',sans-serif" font-size="15" letter-spacing="3">SAMPLE FLOOR PLAN — NOT TO SCALE</text>
+</svg>
