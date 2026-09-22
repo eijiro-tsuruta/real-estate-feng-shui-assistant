@@ -2,6 +2,9 @@
   "name": "real-estate-feng-shui-assistant",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
@@ -14,6 +17,7 @@
     "test": "node --test --import tsx \"tests/**/*.test.ts\""
   },
   "dependencies": {
+    "@line/bot-sdk": "^11.2.0",
     "@neondatabase/serverless": "^1.1.0",
     "drizzle-orm": "^0.45.3",
     "next": "^16.3.5",

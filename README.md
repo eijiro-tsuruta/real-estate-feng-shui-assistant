@@ -102,4 +102,10 @@ npm run db:check
 - 写真は北→東→南→西の順に受け付け、用途不明の物がある場合は回答が揃うまで次へ進みません。
 - 4方向が完了しても自動納品せず、必ずプロ確認を経てから納品済みにします。
 
-状態遷移は純粋なドメインロジックとして実装し、Neonへの保存・復元をリポジトリ層で分離しています。次の実装対象は、LINE Webhook、非公開Object Storageへの画像保存、プロ確認画面との接続です。
+状態遷移は純粋なドメインロジックとして実装し、Neonへの保存・復元をリポジトリ層で分離しています。LINE Webhookの安全な受信・重複防止まで実装済みで、次の実装対象は非公開Object Storageへの画像保存、イベント処理、自動返信、プロ確認画面との接続です。
+
+### LINE Webhook受信
+
+Webhook URLは `/api/line/webhook` です。`LINE_CHANNEL_SECRET` を使って、生のリクエスト本文と `x-line-signature` をLINE公式SDKで検証します。検証後は、イベント本文を保存せず、イベントID、ユーザーID、メッセージID、種類、本文全体のSHA-256だけを `line_events` に記録します。
+
+`webhookEventId` が主キーのため、Webhook再送時も二重登録されません。LINE Developers Consoleの接続確認で送られる空イベントにもHTTP 200を返します。写真取得と自動返信は、Object Storage接続後に `received` 状態のイベント処理として追加します。
