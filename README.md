@@ -38,7 +38,7 @@ LINE版プラスの案件状態はNeon Postgresへ保存します。スキーマ
 - `confirmation_questions`、`confirmation_answers`
 - `reports`、`line_events`
 
-`case_assets` には画像そのものではなく、非公開Object Storage上のオブジェクトキー、MIMEタイプ、サイズ、SHA-256、削除期限を保存します。バケット名は `NEON_STORAGE_BUCKET` で指定します。画像アップロード処理はLINE連携と同時に追加する予定です。
+`case_assets` には画像そのものではなく、非公開Object Storage上のオブジェクトキー、MIMEタイプ、サイズ、SHA-256、削除期限を保存します。バケット名は `NEON_STORAGE_BUCKET` で指定します。LINE画像は取得時にMIMEタイプ・4MB上限・ファイル署名を検査し、ユーザーIDをハッシュ化したキーで30日間保存します。
 
 スキーマ変更時は次の順に実行します。
 
@@ -108,4 +108,4 @@ npm run db:check
 
 Webhook URLは `/api/line/webhook` です。`LINE_CHANNEL_SECRET` を使って、生のリクエスト本文と `x-line-signature` をLINE公式SDKで検証します。検証後は、イベント本文を保存せず、イベントID、ユーザーID、メッセージID、種類、本文全体のSHA-256だけを `line_events` に記録します。
 
-`webhookEventId` が主キーのため、Webhook再送時も二重登録されません。LINE Developers Consoleの接続確認で送られる空イベントにもHTTP 200を返します。写真取得と自動返信は、Object Storage接続後に `received` 状態のイベント処理として追加します。
+`webhookEventId` が主キーのため、Webhook再送時も二重登録されません。LINE Developers Consoleの接続確認で送られる空イベントにもHTTP 200を返します。画像メッセージはLINEから取得して非公開Object Storageへ保存し、案件の北→東→南→西の状態を進め、保存成功後に次の撮影方向を自動返信します。

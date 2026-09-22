@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   MAX_IMAGE_BYTES,
   validateImage,
+  validateImageBytes,
 } from "../lib/file-validation";
 
 const pngSignature = Uint8Array.from([
@@ -45,4 +46,9 @@ test("空ファイルと4MB超過ファイルを拒否する", async () => {
 
   await assert.rejects(validateImage(empty), /4MB以下/);
   await assert.rejects(validateImage(oversized), /4MB以下/);
+});
+
+test("LINE取得画像も同じ署名検査を通す", () => {
+  const result = validateImageBytes(pngSignature, "image/png; charset=binary");
+  assert.equal(result.mediaType, "image/png");
 });

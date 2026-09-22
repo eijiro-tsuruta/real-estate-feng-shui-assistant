@@ -23,6 +23,7 @@ export const lineWebhookEventSchema = z
     webhookEventId: z.string().min(1).max(100),
     type: z.string().min(1).max(50),
     timestamp: z.number().int().nonnegative(),
+    replyToken: z.string().min(1).max(200).optional(),
     source: lineSourceSchema.optional(),
     message: lineMessageSchema.optional(),
     deliveryContext: z

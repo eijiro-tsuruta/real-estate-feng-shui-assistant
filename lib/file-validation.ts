@@ -33,15 +33,26 @@ export async function validateImage(file: File): Promise<{
   bytes: Uint8Array;
   mediaType: AllowedImageType;
 }> {
-  if (!allowedImageTypes.includes(file.type as AllowedImageType)) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return validateImageBytes(bytes, file.type);
+}
+
+export function validateImageBytes(
+  bytes: Uint8Array,
+  contentType: string,
+): {
+  bytes: Uint8Array;
+  mediaType: AllowedImageType;
+} {
+  const normalizedType = contentType.split(";", 1)[0].trim().toLowerCase();
+  if (!allowedImageTypes.includes(normalizedType as AllowedImageType)) {
     throw new Error("JPEG、PNG、WebPの画像を選択してください。");
   }
-  if (file.size <= 0 || file.size > MAX_IMAGE_BYTES) {
+  const mediaType = normalizedType as AllowedImageType;
+  if (bytes.byteLength <= 0 || bytes.byteLength > MAX_IMAGE_BYTES) {
     throw new Error("画像サイズは4MB以下にしてください。");
   }
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const mediaType = file.type as AllowedImageType;
   if (!matchesSignature(bytes, mediaType)) {
     throw new Error("画像の形式を確認できませんでした。別の画像を選択してください。");
   }
