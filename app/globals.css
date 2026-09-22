@@ -898,6 +898,41 @@ fieldset {
   margin-top: 55px;
 }
 
+.money-reading {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 28px;
+  padding: 24px;
+  background: #fbf7eb;
+  border-left: 3px solid var(--gold);
+}
+
+.money-reading span {
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.money-reading h4 {
+  margin: 8px 0 10px;
+  font-family: "Yu Mincho", "Hiragino Mincho ProN", serif;
+  font-size: 17px;
+}
+
+.money-reading p,
+.money-reading li {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.money-reading ul {
+  margin: 0;
+  padding: 16px 18px 16px 34px;
+  background: rgba(255, 255, 255, 0.65);
+}
+
 .report-kicker {
   margin: 0 0 8px;
   color: var(--gold);
@@ -1206,6 +1241,7 @@ footer p {
   }
 
   .report-overview,
+  .money-reading,
   .concern-list > article {
     grid-template-columns: 1fr;
   }

@@ -600,6 +600,23 @@ const ReportResult = forwardRef<
         </section>
 
         <section className="report-section">
+          <p className="report-kicker">MONEY FLOW</p>
+          <h3>住まいの金運</h3>
+          <div className="money-reading">
+            <div>
+              <span>{report.money.directions.join("・")}</span>
+              <h4>{report.money.headline}</h4>
+              <p>{report.money.reading}</p>
+            </div>
+            <ul>
+              {report.money.actions.map((action) => (
+                <li key={action}>{action}</li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section className="report-section">
           <p className="report-kicker">POSITIVE POINTS</p>
           <h3>風水観点で見た良い点</h3>
           <div className="point-list positive-list">

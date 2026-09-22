@@ -11,6 +11,12 @@ const validReport = {
     summary: "玄関、LDK、洋室、水回りを確認しました。",
   },
   placements: [{ direction: "北", rooms: ["洋室"] }],
+  money: {
+    headline: "玄関を整えやすい配置",
+    reading: "一般的な風水では、玄関の明るさと清潔さが金運の入口として重視されます。",
+    directions: ["北"],
+    actions: ["玄関の照明と足元を確認する"],
+  },
   positives: [
     {
       title: "明るいLDK",
@@ -41,6 +47,15 @@ test("改善策のない気になる点を拒否する", () => {
   const invalid = {
     ...validReport,
     concerns: [{ ...validReport.concerns[0], remedies: [] }],
+  };
+
+  assert.equal(reportSchema.safeParse(invalid).success, false);
+});
+
+test("金運の根拠方位と改善行動を必須にする", () => {
+  const invalid = {
+    ...validReport,
+    money: { ...validReport.money, actions: [] },
   };
 
   assert.equal(reportSchema.safeParse(invalid).success, false);

@@ -28,6 +28,13 @@ export const concernSchema = pointSchema.extend({
   remedies: z.array(z.string().min(1).max(200)).min(1).max(5),
 });
 
+export const moneyReadingSchema = z.object({
+  headline: z.string().min(1).max(100),
+  reading: z.string().min(1).max(500),
+  directions: z.array(directionSchema).min(1).max(4),
+  actions: z.array(z.string().min(1).max(200)).min(1).max(3),
+});
+
 export const reportSchema = z.object({
   propertySummary: z.string().min(1).max(700),
   reading: z.object({
@@ -36,6 +43,7 @@ export const reportSchema = z.object({
     summary: z.string().min(1).max(700),
   }),
   placements: z.array(placementSchema).min(1).max(9),
+  money: moneyReadingSchema,
   positives: z.array(pointSchema).min(1).max(6),
   concerns: z.array(concernSchema).max(6),
   talkTrack: z.string().min(1).max(700),
