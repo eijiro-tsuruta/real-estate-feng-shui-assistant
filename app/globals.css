@@ -350,8 +350,32 @@ fieldset legend span {
   font-size: 12px;
 }
 
+.file-select-button {
+  margin-top: 18px;
+  padding: 11px 24px;
+  color: var(--paper);
+  background: var(--forest);
+  border: 1px solid var(--forest);
+  border-radius: 3px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.file-select-button:hover {
+  background: #174d43;
+}
+
+.file-select-button:focus-visible {
+  outline: 3px solid rgba(15, 59, 51, 0.22);
+  outline-offset: 3px;
+}
+
 .drop-action small {
-  margin-top: 20px;
+  margin-top: 14px;
   color: #95a39e;
   font-size: 10px;
 }

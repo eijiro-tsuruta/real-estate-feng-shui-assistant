@@ -268,20 +268,24 @@ export default function Home() {
                     </div>
                   </>
                 ) : (
-                  <button
-                    className="drop-action"
-                    type="button"
-                    onClick={() => inputRef.current?.click()}
-                  >
+                  <div className="drop-action">
                     <span className="upload-icon">
                       <UploadIcon />
                     </span>
                     <strong>間取り図をここにドロップ</strong>
-                    <span>またはクリックしてファイルを選択</span>
+                    <span>または端末内の画像を選択</span>
+                    <button
+                      className="file-select-button"
+                      type="button"
+                      onClick={() => inputRef.current?.click()}
+                    >
+                      ファイルから選ぶ
+                    </button>
                     <small>JPEG / PNG / WebP・最大4MB</small>
-                  </button>
+                  </div>
                 )}
                 <input
+                  id="floorPlanFile"
                   ref={inputRef}
                   className="sr-only"
                   type="file"
