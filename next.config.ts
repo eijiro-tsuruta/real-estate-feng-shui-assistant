@@ -17,8 +17,26 @@ const contentSecurityPolicy = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   outputFileTracingRoot: process.cwd(),
+  async rewrites() {
+    return [
+      {
+        source: "/downloads/sample-floorplan.png",
+        destination: "/sample-floorplan.png",
+      },
+    ];
+  },
   async headers() {
     return [
+      {
+        source: "/downloads/sample-floorplan.png",
+        headers: [
+          {
+            key: "Content-Disposition",
+            value: 'attachment; filename="sample-floorplan.png"',
+          },
+          { key: "Content-Type", value: "image/png" },
+        ],
+      },
       {
         source: "/:path*",
         headers: [

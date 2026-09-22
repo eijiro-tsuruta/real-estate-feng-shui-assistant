@@ -44,7 +44,7 @@ export default function LandingPage() {
         </Link>
         <nav aria-label="メインナビゲーション">
           <a href="#how-it-works">使い方</a><a href="#report">レポート例</a>
-          <a href="/sample-floorplan.png" download>サンプル図面</a>
+          <a href="/downloads/sample-floorplan.png">サンプル図面</a>
           <Link className="lp-nav-cta" href="/product">無料で試す <span>→</span></Link>
         </nav>
       </header>
@@ -56,7 +56,7 @@ export default function LandingPage() {
           <p className="lp-lead">間取り図を入れるだけ。AIが方位と部屋配置を読み取り、商談で見せられる説明レポートに整えます。</p>
           <div className="lp-actions">
             <Link className="lp-primary-cta" href="/product"><span>無料でレポートを作る</span><b>→</b></Link>
-            <a className="lp-download-link" href="/sample-floorplan.png" download>
+            <a className="lp-download-link" href="/downloads/sample-floorplan.png">
               <DownloadIcon /><span>サンプル間取り図をダウンロード<small>PNG・1.1MB</small></span>
             </a>
           </div>
@@ -137,7 +137,7 @@ export default function LandingPage() {
         <h2>次の内見から、<br />風水の質問に迷わない。</h2>
         <span>期間限定ですべての機能を無料公開しています。</span>
         <Link href="/product">無料でレポートを作る <b>→</b></Link>
-        <a href="/sample-floorplan.png" download><DownloadIcon /> サンプル間取り図をダウンロード</a>
+        <a href="/downloads/sample-floorplan.png"><DownloadIcon /> サンプル間取り図をダウンロード</a>
       </section>
 
       <footer className="lp-footer">

@@ -184,7 +184,7 @@ export default function Home() {
           </span>
         </Link>
         <div className="product-header-actions">
-          <a href="/sample-floorplan.png" download>サンプル図面 ↓</a>
+          <a href="/downloads/sample-floorplan.png">サンプル図面 ↓</a>
           <span className="free-badge">期間限定・無料公開中</span>
         </div>
       </header>
