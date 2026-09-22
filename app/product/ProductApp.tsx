@@ -259,12 +259,9 @@ export default function Home() {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={preview} alt="選択した間取り図のプレビュー" />
                     <div className="preview-overlay">
-                      <button
-                        type="button"
-                        onClick={() => inputRef.current?.click()}
-                      >
+                      <span className="file-change-button" aria-hidden="true">
                         画像を変更
-                      </button>
+                      </span>
                     </div>
                   </>
                 ) : (
@@ -274,22 +271,19 @@ export default function Home() {
                     </span>
                     <strong>間取り図をここにドロップ</strong>
                     <span>または端末内の画像を選択</span>
-                    <button
-                      className="file-select-button"
-                      type="button"
-                      onClick={() => inputRef.current?.click()}
-                    >
+                    <span className="file-select-button" aria-hidden="true">
                       ファイルから選ぶ
-                    </button>
+                    </span>
                     <small>JPEG / PNG / WebP・最大4MB</small>
                   </div>
                 )}
                 <input
                   id="floorPlanFile"
                   ref={inputRef}
-                  className="sr-only"
+                  className="file-input-overlay"
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
+                  aria-label={preview ? "間取り図の画像を変更" : "間取り図をファイルから選ぶ"}
                   onChange={(event: ChangeEvent<HTMLInputElement>) =>
                     selectFile(event.target.files?.[0])
                   }
