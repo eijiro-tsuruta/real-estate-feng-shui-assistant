@@ -70,6 +70,8 @@
 - ホスティング：Vercel
 - ソース管理：GitHub
 - AI：OpenAI Responses API
+- 案件データベース：Neon Postgres + Drizzle ORM
+- 画像保存：Neon Object Storageの非公開バケット（予定）
 
 AIの主な用途：
 
@@ -132,3 +134,6 @@ AIの主な用途：
 - 商談でそのまま使える柔らかい表現にする。
 - 営業担当者が専門家のように見えすぎない文体にする。
 - 顧客との会話を円滑にすることを最優先にする。
+- APIキー、DB接続文字列、Object Storage認証情報はサーバー環境変数だけで扱い、Gitやブラウザへ出さない。
+- 画像本体はDBへ格納せず、非公開Object Storageのキーと削除期限だけをDBで管理する。
+- LINE WebhookはイベントIDで重複処理を防ぎ、案件の状態遷移と保存を一体で扱う。
