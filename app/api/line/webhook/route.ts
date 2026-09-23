@@ -4,6 +4,7 @@ import { z } from "zod";
 import { recordLineEvent } from "@/lib/db/line-event-repository";
 import {
   clearLineMenuSelection,
+  getLineIntakeAsset,
   getLineMenuSession,
   saveLineIntakeAsset,
   selectLineMenu,
@@ -19,8 +20,10 @@ import {
 } from "@/lib/db/line-photo-repository";
 import {
   fetchLineImage,
+  pushLineNorthConfirmation,
   pushLineText,
   replyLineMenu,
+  replyLineNorthDirectionMenu,
   replyLinePhotoChangeMenu,
   replyLinePhotoCompletion,
   replyLineRoomTypeMenu,
@@ -36,6 +39,7 @@ import {
   isLineMenuOpenPostback,
   isLineMenuCommand,
   isRoomAdvicePostback,
+  parseFloorPlanNorthPostback,
   parsePhotoChangePostback,
   parseLineMenuPostback,
   parseRoomTypePostback,
@@ -61,7 +65,11 @@ import {
   sha256Text,
   verifyLineWebhookSignature,
 } from "@/lib/line/webhook";
-import { deletePrivateObject, putPrivateObject } from "@/lib/object-storage";
+import {
+  deletePrivateObject,
+  getPrivateObject,
+  putPrivateObject,
+} from "@/lib/object-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -389,6 +397,82 @@ export async function POST(request: Request) {
       const session = event.source?.userId
         ? await getLineMenuSession(event.source.userId)
         : null;
+
+      const floorPlanNorth = parseFloorPlanNorthPostback(event.postback?.data);
+      if (
+        event.type === "postback" &&
+        floorPlanNorth &&
+        session?.selection === "building_feng_shui" &&
+        event.source?.userId &&
+        event.replyToken
+      ) {
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processing",
+        });
+        if (floorPlanNorth === "select") {
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "processed",
+          });
+          try {
+            await replyLineNorthDirectionMenu(event.replyToken);
+          } catch {
+            console.error("Failed to send LINE north direction menu");
+          }
+          continue;
+        }
+
+        let progressSent = false;
+        try {
+          const asset = await getLineIntakeAsset(
+            event.source.userId,
+            "floorplan",
+          );
+          if (!asset) throw new Error("Floor plan asset is unavailable.");
+          const object = await getPrivateObject(asset.objectKey);
+          await replyLineText(
+            event.replyToken,
+            "方位を確認しました。現在診断しております。しばらくお待ちください。",
+          );
+          progressSent = true;
+          const report = await generateLineBuildingAdvice(
+            { bytes: object.bytes, mediaType: asset.mediaType },
+            floorPlanNorth === "assume_up"
+              ? { assumeTopNorth: true }
+              : { northOverride: floorPlanNorth },
+          );
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "processed",
+          });
+          await pushLineText(
+            event.source.userId,
+            formatLineBuildingAdvice(report),
+          );
+        } catch (error) {
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "error",
+            errorCode: "building_north_advice_failed",
+          });
+          try {
+            const message =
+              "方位を使った診断を完了できませんでした。もう一度お試しください。";
+            if (progressSent) {
+              await pushLineText(event.source.userId, message);
+            } else {
+              await replyLineText(event.replyToken, message);
+            }
+          } catch {
+            console.error("Failed to send LINE north advice error");
+          }
+          console.error("Failed to generate LINE north advice", {
+            error: error instanceof Error ? error.name : "UnknownError",
+          });
+        }
+        continue;
+      }
 
       const selectedRoomType = parseRoomTypePostback(event.postback?.data);
       if (
@@ -728,10 +812,14 @@ export async function POST(request: Request) {
                 status: "processed",
               });
               try {
-                await pushLineText(
-                  event.source.userId,
-                  formatLineBuildingAdvice(report),
-                );
+                if (report.reading.confidence === "低") {
+                  await pushLineNorthConfirmation(event.source.userId);
+                } else {
+                  await pushLineText(
+                    event.source.userId,
+                    formatLineBuildingAdvice(report),
+                  );
+                }
               } catch {
                 console.error("Failed to send LINE building advice");
               }

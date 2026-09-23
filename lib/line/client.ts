@@ -84,6 +84,56 @@ export function buildLineRoomTypeMessage(): LineReplyMessage {
   };
 }
 
+export function buildLineNorthConfirmationMessage(): LineReplyMessage {
+  return {
+    type: "text",
+    text: "方位マークを確認できませんでした。図面の上を北として診断してよいですか？",
+    quickReply: {
+      items: [
+        ["はい、上が北です", "floorplan_north=up"],
+        ["別の方向が北です", "floorplan_north=select"],
+        ["方位がわかりません", "floorplan_north=assume_up"],
+      ].map(([label, data]) => ({
+        type: "action" as const,
+        action: {
+          type: "postback" as const,
+          label,
+          data,
+          displayText: label,
+        },
+      })),
+    },
+  };
+}
+
+export function buildLineNorthDirectionMessage(): LineReplyMessage {
+  const directions = [
+    ["上", "up"],
+    ["右上", "upRight"],
+    ["右", "right"],
+    ["右下", "downRight"],
+    ["下", "down"],
+    ["左下", "downLeft"],
+    ["左", "left"],
+    ["左上", "upLeft"],
+  ];
+  return {
+    type: "text",
+    text: "北にあたる方向を選んでください。",
+    quickReply: {
+      items: directions.map(([label, direction]) => ({
+        type: "action" as const,
+        action: {
+          type: "postback" as const,
+          label,
+          data: `floorplan_north=${direction}`,
+          displayText: `北は${label}です`,
+        },
+      })),
+    },
+  };
+}
+
 export function buildLinePhotoChangeMessage(
   directions: PhotoDirection[],
 ): LineReplyMessage {
@@ -189,6 +239,18 @@ export async function pushLineText(
   text: string,
 ): Promise<void> {
   await pushLineMessages(lineUserId, [{ type: "text", text }]);
+}
+
+export async function pushLineNorthConfirmation(
+  lineUserId: string,
+): Promise<void> {
+  await pushLineMessages(lineUserId, [buildLineNorthConfirmationMessage()]);
+}
+
+export async function replyLineNorthDirectionMenu(
+  replyToken: string,
+): Promise<void> {
+  await replyLineMessages(replyToken, [buildLineNorthDirectionMessage()]);
 }
 
 export async function replyLineMenu(replyToken: string): Promise<void> {

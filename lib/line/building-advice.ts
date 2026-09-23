@@ -1,4 +1,5 @@
 import { generateFloorPlanReport } from "../floorplan-report";
+import type { NorthOverride } from "../north-direction";
 import {
   REPORT_DISCLAIMER,
   type FengShuiReport,
@@ -7,11 +8,15 @@ import {
 export async function generateLineBuildingAdvice(image: {
   bytes: Uint8Array;
   mediaType: string;
+}, options?: {
+  northOverride?: Exclude<NorthOverride, "auto">;
+  assumeTopNorth?: boolean;
 }): Promise<FengShuiReport> {
   return generateFloorPlanReport({
     ...image,
     propertyName: "LINEで受け付けた物件",
-    northOverride: "auto",
+    northOverride: options?.northOverride ?? "auto",
+    assumeTopNorth: options?.assumeTopNorth,
   });
 }
 

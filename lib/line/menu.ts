@@ -27,6 +27,17 @@ export const roomTypes = [
 export type RoomType = (typeof roomTypes)[number];
 
 export type PhotoChangePostback = "start" | "north" | "east" | "south" | "west";
+export type FloorPlanNorthPostback =
+  | "select"
+  | "assume_up"
+  | "up"
+  | "upRight"
+  | "right"
+  | "downRight"
+  | "down"
+  | "downLeft"
+  | "left"
+  | "upLeft";
 
 const menuCommands = new Set([
   "メニュー",
@@ -71,6 +82,17 @@ export function parseRoomTypePostback(data: string | undefined): RoomType | null
     data,
   );
   return (match?.[1] as RoomType | undefined) ?? null;
+}
+
+export function parseFloorPlanNorthPostback(
+  data: string | undefined,
+): FloorPlanNorthPostback | null {
+  if (!data) return null;
+  const match =
+    /^floorplan_north=(select|assume_up|up|upRight|right|downRight|down|downLeft|left|upLeft)$/.exec(
+      data,
+    );
+  return (match?.[1] as FloorPlanNorthPostback | undefined) ?? null;
 }
 
 export function roomTypeLabel(roomType: RoomType): string {

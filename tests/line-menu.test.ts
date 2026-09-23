@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildLineMenuMessage,
+  buildLineNorthConfirmationMessage,
+  buildLineNorthDirectionMessage,
   buildLinePhotoChangeMessage,
   buildLinePhotoCompletionMessage,
   buildLineRoomTypeMessage,
@@ -12,6 +14,7 @@ import {
   initialStepForMenu,
   isLineMenuOpenPostback,
   isLineMenuCommand,
+  parseFloorPlanNorthPostback,
   parsePhotoChangePostback,
   parseLineMenuPostback,
   parseRoomTypePostback,
@@ -46,6 +49,39 @@ test("変更する方角をボタンで選択する", () => {
   assert.equal(parsePhotoChangePostback("photo_change=start"), "start");
   assert.equal(parsePhotoChangePostback("photo_change=south"), "south");
   assert.equal(parsePhotoChangePostback("photo_change=invalid"), null);
+});
+
+test("間取り図の北方向をボタンで確認する", () => {
+  assert.deepEqual(
+    buildLineNorthConfirmationMessage().quickReply?.items.map(
+      (item) => item.action.data,
+    ),
+    [
+      "floorplan_north=up",
+      "floorplan_north=select",
+      "floorplan_north=assume_up",
+    ],
+  );
+  assert.equal(parseFloorPlanNorthPostback("floorplan_north=select"), "select");
+  assert.equal(
+    parseFloorPlanNorthPostback("floorplan_north=assume_up"),
+    "assume_up",
+  );
+  assert.deepEqual(
+    buildLineNorthDirectionMessage().quickReply?.items.map(
+      (item) => item.action.data,
+    ),
+    [
+      "floorplan_north=up",
+      "floorplan_north=upRight",
+      "floorplan_north=right",
+      "floorplan_north=downRight",
+      "floorplan_north=down",
+      "floorplan_north=downLeft",
+      "floorplan_north=left",
+      "floorplan_north=upLeft",
+    ],
+  );
 });
 
 test("3つのメニューをクイックリプライボタンで表示する", () => {

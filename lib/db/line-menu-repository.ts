@@ -166,3 +166,30 @@ export async function saveLineIntakeAsset(args: {
   });
   return { previousObjectKey: null };
 }
+
+export async function getLineIntakeAsset(
+  lineUserId: string,
+  kind: LineIntakeAssetKind,
+): Promise<{
+  objectKey: string;
+  mediaType: string;
+} | null> {
+  const [asset] = await getDatabase()
+    .select({
+      objectKey: lineIntakeAssets.objectKey,
+      mediaType: lineIntakeAssets.mediaType,
+    })
+    .from(customers)
+    .innerJoin(
+      lineIntakeAssets,
+      eq(lineIntakeAssets.customerId, customers.id),
+    )
+    .where(
+      and(
+        eq(customers.lineUserId, lineUserId),
+        eq(lineIntakeAssets.kind, kind),
+      ),
+    )
+    .limit(1);
+  return asset ?? null;
+}
