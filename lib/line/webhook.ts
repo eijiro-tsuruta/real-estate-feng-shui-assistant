@@ -48,6 +48,12 @@ export const lineWebhookBodySchema = z
 
 export type LineWebhookEvent = z.infer<typeof lineWebhookEventSchema>;
 
+export function isLineImageUploadMessage(
+  messageType: string | undefined,
+): boolean {
+  return messageType === "image" || messageType === "file";
+}
+
 export function verifyLineWebhookSignature(args: {
   rawBody: string;
   channelSecret: string;

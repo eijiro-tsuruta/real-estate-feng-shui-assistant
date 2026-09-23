@@ -50,6 +50,7 @@ import {
 } from "@/lib/line/room-advice";
 import {
   getLineEventMetadata,
+  isLineImageUploadMessage,
   MAX_LINE_WEBHOOK_BYTES,
   parseLineWebhookBody,
   sha256Text,
@@ -607,10 +608,12 @@ export async function POST(request: Request) {
         continue;
       }
 
+      const uploadMessage = event.message;
       if (
         event.type !== "message" ||
-        event.message?.type !== "image" ||
-        !event.message.id ||
+        !uploadMessage ||
+        !isLineImageUploadMessage(uploadMessage.type) ||
+        !uploadMessage.id ||
         !event.source?.userId ||
         !event.replyToken
       ) {
@@ -658,7 +661,7 @@ export async function POST(request: Request) {
       let objectKey: string | undefined;
       let photoSaved = false;
       try {
-        const image = await fetchLineImage(event.message.id);
+        const image = await fetchLineImage(uploadMessage.id);
         if (
           session.selection === "building_feng_shui" ||
           session.selection === "wall_image"
@@ -788,6 +791,19 @@ export async function POST(request: Request) {
               ? "image_too_large"
               : "image_processing_failed",
         });
+        try {
+          const reply =
+            error instanceof Error && /4MB/.test(error.message)
+              ? "画像サイズは4MB以下にしてください。"
+              : error instanceof Error && /JPEG、PNG、WebP/.test(error.message)
+                ? session.selection === "building_feng_shui"
+                  ? "間取り図はJPEG、PNG、WebP形式で送ってください。PDFには現在対応していません。"
+                  : "画像はJPEG、PNG、WebP形式で送ってください。PDFには現在対応していません。"
+                : "画像を処理できませんでした。JPEG、PNG、WebP形式で、もう一度送ってください。";
+          await replyLineText(event.replyToken, reply);
+        } catch {
+          console.error("Failed to send LINE image processing error reply");
+        }
         console.error("Failed to process LINE image event", {
           error: error instanceof Error ? error.name : "UnknownError",
         });

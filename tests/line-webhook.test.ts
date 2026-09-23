@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import test from "node:test";
 import {
   getLineEventMetadata,
+  isLineImageUploadMessage,
   parseLineWebhookBody,
   sha256Text,
   verifyLineWebhookSignature,
@@ -88,6 +89,13 @@ test("メニュー選択のpostbackイベントを受け付ける", () => {
     }),
   );
   assert.equal(webhook.events[0].postback?.data, "menu=wall_image");
+});
+
+test("画像と画像ファイルの両方をアップロードとして受け付ける", () => {
+  assert.equal(isLineImageUploadMessage("image"), true);
+  assert.equal(isLineImageUploadMessage("file"), true);
+  assert.equal(isLineImageUploadMessage("video"), false);
+  assert.equal(isLineImageUploadMessage(undefined), false);
 });
 
 test("Webhook本文のSHA-256を安定して生成する", () => {
