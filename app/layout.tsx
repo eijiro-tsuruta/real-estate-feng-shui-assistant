@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "住まいの方位レポート | 間取りから、会話のきっかけを。",
+  title: "Rain AI | おうち風水 — LINEで住まいの相談をもっと具体的に",
   description:
-    "間取り図から、一般的な風水の考え方に基づく説明用レポートを作成します。",
+    "建物間取り風水、お部屋の配置アドバイス、壁の完成イメージをLINEで。不動産・住宅・リフォームのお客様提案をAIが支えます。",
   robots: { index: true, follow: true },
 };
 
