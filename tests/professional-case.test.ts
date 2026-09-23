@@ -8,6 +8,7 @@ import {
   receiveConfirmationAnswers,
   receiveDirectionPhoto,
   receiveFloorPlan,
+  retractDirectionPhoto,
   retractLatestDirectionPhoto,
 } from "../lib/professional-case";
 
@@ -179,6 +180,41 @@ test("4方向完了後も納品前なら西側を撮り直せる", () => {
   const retracted = retractLatestDirectionPhoto(result, now);
   assert.equal(retracted?.direction, "west");
   assert.equal(retracted?.professionalCase.status, "awaiting_west_photo");
+});
+
+test("4方向完了後に任意の方角だけを差し替えて確認待ちへ戻る", () => {
+  let result = createProfessionalCase({
+    id: "case_targeted_retake",
+    professionalId: "pro_1",
+    customerLineUserId: "line_targeted_retake",
+    offering: "renovation",
+    now,
+  });
+  for (const direction of ["north", "east", "south", "west"] as const) {
+    result = receiveDirectionPhoto({
+      current: result,
+      direction,
+      assetId: `asset_${direction}`,
+      now,
+    });
+  }
+
+  const retracted = retractDirectionPhoto(result, "east", now);
+  assert.equal(retracted?.professionalCase.status, "awaiting_east_photo");
+  assert.deepEqual(retracted?.professionalCase.photoAssetIds, {
+    north: "asset_north",
+    south: "asset_south",
+    west: "asset_west",
+  });
+
+  const replaced = receiveDirectionPhoto({
+    current: retracted!.professionalCase,
+    direction: "east",
+    assetId: "asset_east_new",
+    now,
+  });
+  assert.equal(replaced.status, "professional_review");
+  assert.equal(replaced.photoAssetIds.east, "asset_east_new");
 });
 
 test("写真がない案件は取り消さず、納品後は撮り直せない", () => {

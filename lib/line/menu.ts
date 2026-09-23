@@ -17,6 +17,8 @@ export type LineMenuStep =
 
 export type LineIntakeAssetKind = "floorplan" | "wall" | "wallpaper";
 
+export type PhotoChangePostback = "start" | "north" | "east" | "south" | "west";
+
 const menuCommands = new Set([
   "メニュー",
   "最初に戻る",
@@ -36,6 +38,18 @@ export function parseLineMenuPostback(
     data,
   );
   return (match?.[1] as LineMenuSelection | undefined) ?? null;
+}
+
+export function isLineMenuOpenPostback(data: string | undefined): boolean {
+  return data === "menu=open";
+}
+
+export function parsePhotoChangePostback(
+  data: string | undefined,
+): PhotoChangePostback | null {
+  if (!data) return null;
+  const match = /^photo_change=(start|north|east|south|west)$/.exec(data);
+  return (match?.[1] as PhotoChangePostback | undefined) ?? null;
 }
 
 export function initialStepForMenu(

@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildLineMenuMessage } from "../lib/line/client";
+import {
+  buildLineMenuMessage,
+  buildLinePhotoChangeMessage,
+  buildLinePhotoCompletionMessage,
+} from "../lib/line/client";
 import {
   buildLineIntakeObjectKey,
   buildMenuSelectionMessage,
   initialStepForMenu,
+  isLineMenuOpenPostback,
   isLineMenuCommand,
+  parsePhotoChangePostback,
   parseLineMenuPostback,
 } from "../lib/line/menu";
 
@@ -17,6 +23,26 @@ test("固定IDのメニューポストバックを解釈する", () => {
   assert.equal(parseLineMenuPostback("menu=room_feng_shui"), "room_feng_shui");
   assert.equal(parseLineMenuPostback("menu=wall_image"), "wall_image");
   assert.equal(parseLineMenuPostback("menu=unknown"), null);
+});
+
+test("写真完了後に変更とメニューのボタンを表示する", () => {
+  const message = buildLinePhotoCompletionMessage("受付完了");
+  assert.deepEqual(
+    message.quickReply?.items.map((item) => item.action.data),
+    ["photo_change=start", "menu=open"],
+  );
+  assert.equal(isLineMenuOpenPostback("menu=open"), true);
+});
+
+test("変更する方角をボタンで選択する", () => {
+  const message = buildLinePhotoChangeMessage(["north", "east", "west"]);
+  assert.deepEqual(
+    message.quickReply?.items.map((item) => item.action.data),
+    ["photo_change=north", "photo_change=east", "photo_change=west"],
+  );
+  assert.equal(parsePhotoChangePostback("photo_change=start"), "start");
+  assert.equal(parsePhotoChangePostback("photo_change=south"), "south");
+  assert.equal(parsePhotoChangePostback("photo_change=invalid"), null);
 });
 
 test("3つのメニューをクイックリプライボタンで表示する", () => {

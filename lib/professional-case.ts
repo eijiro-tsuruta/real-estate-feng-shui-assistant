@@ -78,9 +78,10 @@ function awaitingPhotoStatus(direction: PhotoDirection): ProfessionalCase["statu
   return `awaiting_${direction}_photo`;
 }
 
-function nextDirection(direction: PhotoDirection): PhotoDirection | "complete" {
-  const index = directionOrder.indexOf(direction);
-  return directionOrder[index + 1] ?? "complete";
+function nextMissingDirection(
+  photoAssetIds: ProfessionalCase["photoAssetIds"],
+): PhotoDirection | "complete" {
+  return directionOrder.find((direction) => !photoAssetIds[direction]) ?? "complete";
 }
 
 function withUpdate(
@@ -194,7 +195,7 @@ export function receiveDirectionPhoto(args: {
     );
   }
 
-  const next = nextDirection(args.direction);
+  const next = nextMissingDirection(photoAssetIds);
   return withUpdate(
     args.current,
     {
@@ -203,6 +204,41 @@ export function receiveDirectionPhoto(args: {
     },
     now,
   );
+}
+
+export function retractDirectionPhoto(
+  current: ProfessionalCase,
+  direction: PhotoDirection,
+  now = new Date().toISOString(),
+): {
+  direction: PhotoDirection;
+  assetId: string;
+  professionalCase: ProfessionalCase;
+} | null {
+  if (current.status === "delivered") {
+    throw new Error("納品済みの案件は撮り直しできません。");
+  }
+
+  const assetId = current.photoAssetIds[direction];
+  if (!assetId) return null;
+
+  const photoAssetIds = { ...current.photoAssetIds };
+  delete photoAssetIds[direction];
+
+  return {
+    direction,
+    assetId,
+    professionalCase: withUpdate(
+      current,
+      {
+        photoAssetIds,
+        status: awaitingPhotoStatus(direction),
+        pendingDirection: null,
+        pendingQuestionIds: [],
+      },
+      now,
+    ),
+  };
 }
 
 export function retractLatestDirectionPhoto(
@@ -257,7 +293,7 @@ export function receiveConfirmationAnswers(
     throw new Error("必要な確認質問への回答が不足しています。");
   }
 
-  const next = nextDirection(current.pendingDirection);
+  const next = nextMissingDirection(current.photoAssetIds);
   return withUpdate(
     current,
     {

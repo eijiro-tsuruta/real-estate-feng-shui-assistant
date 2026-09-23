@@ -18,6 +18,8 @@ const nextDirections: Partial<Record<PhotoDirection, PhotoDirection>> = {
 const retakeCommands = new Set([
   "撮り直し",
   "撮り直す",
+  "取り直し",
+  "取り直す",
   "やり直し",
   "一つ戻る",
   "ひとつ戻る",
@@ -49,10 +51,13 @@ export function buildLinePhotoObjectKey(args: {
   return `line/${userHash}/${args.caseId}/${args.direction}/${args.assetId}.${extension}`;
 }
 
-export function buildPhotoReceiptMessage(direction: PhotoDirection): string {
-  const next = nextDirections[direction];
+export function buildPhotoReceiptMessage(
+  direction: PhotoDirection,
+  nextDirection: PhotoDirection | null = nextDirections[direction] ?? null,
+): string {
+  const next = nextDirection;
   if (!next) {
-    return `${directionLabels[direction]}の写真を安全に保存しました。\n4方向の写真が揃いました。担当者の確認後に診断結果をお届けします。\n写真を間違えた場合は「撮り直し」と送ってください。`;
+    return `${directionLabels[direction]}の写真を安全に保存しました。\n4方向の写真が揃い、診断の受付が完了しました。\n担当者の確認後、このLINEに診断結果をお届けします。お客様の操作はここで完了です。`;
   }
   return `${directionLabels[direction]}の写真を安全に保存しました。\n次は${directionLabels[next]}を撮影して送ってください。\n写真を間違えた場合は「撮り直し」と送ってください。`;
 }

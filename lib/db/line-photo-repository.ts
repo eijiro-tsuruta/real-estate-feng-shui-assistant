@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import {
   createProfessionalCase,
   receiveDirectionPhoto,
+  retractDirectionPhoto,
   retractLatestDirectionPhoto,
   type PhotoDirection,
   type ProfessionalCase,
@@ -29,12 +30,15 @@ const ACTIVE_PHOTO_STATUSES = [
   "awaiting_west_photo",
 ] as const;
 const CORRECTABLE_PHOTO_STATUSES = [
+  "awaiting_north_photo",
   "awaiting_east_photo",
   "awaiting_south_photo",
   "awaiting_west_photo",
   "awaiting_answers",
   "professional_review",
 ] as const;
+
+const PHOTO_DIRECTIONS: PhotoDirection[] = ["north", "east", "south", "west"];
 
 function stableCustomerId(lineUserId: string): string {
   return `line-${createHash("sha256").update(lineUserId).digest("hex").slice(0, 32)}`;
@@ -234,6 +238,94 @@ export async function retractLatestLinePhoto(lineUserId: string): Promise<{
   return {
     caseId: active.caseId,
     direction: retracted.direction,
+    objectKey: asset.objectKey,
+  };
+}
+
+export async function getLinePhotoChangeOptions(
+  lineUserId: string,
+): Promise<PhotoDirection[]> {
+  const [active] = await getDatabase()
+    .select({ caseId: cases.id })
+    .from(cases)
+    .innerJoin(customers, eq(cases.customerId, customers.id))
+    .where(
+      and(
+        eq(customers.lineUserId, lineUserId),
+        inArray(cases.status, [...CORRECTABLE_PHOTO_STATUSES]),
+      ),
+    )
+    .orderBy(desc(cases.updatedAt))
+    .limit(1);
+  if (!active) return [];
+  const saved = await getProfessionalCaseState(active.caseId);
+  if (!saved) return [];
+  return PHOTO_DIRECTIONS.filter(
+    (direction) => Boolean(saved.professionalCase.photoAssetIds[direction]),
+  );
+}
+
+export async function retractLinePhotoDirection(
+  lineUserId: string,
+  direction: PhotoDirection,
+): Promise<{
+  caseId: string;
+  direction: PhotoDirection;
+  objectKey: string;
+} | null> {
+  const db = getDatabase();
+  const [active] = await db
+    .select({ caseId: cases.id, customerId: customers.id })
+    .from(cases)
+    .innerJoin(customers, eq(cases.customerId, customers.id))
+    .where(
+      and(
+        eq(customers.lineUserId, lineUserId),
+        inArray(cases.status, [...CORRECTABLE_PHOTO_STATUSES]),
+      ),
+    )
+    .orderBy(desc(cases.updatedAt))
+    .limit(1);
+  if (!active) return null;
+
+  const saved = await getProfessionalCaseState(active.caseId);
+  if (!saved) throw new Error("Correctable LINE case could not be loaded.");
+  const retracted = retractDirectionPhoto(saved.professionalCase, direction);
+  if (!retracted) return null;
+
+  const [asset] = await db
+    .select({ id: caseAssets.id, objectKey: caseAssets.objectKey })
+    .from(caseAssets)
+    .where(
+      and(
+        eq(caseAssets.id, retracted.assetId),
+        eq(caseAssets.caseId, active.caseId),
+        isNull(caseAssets.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!asset) throw new Error("The photo selected for retake is unavailable.");
+
+  await db
+    .update(caseAssets)
+    .set({ deletedAt: new Date() })
+    .where(eq(caseAssets.id, asset.id));
+  try {
+    await saveProfessionalCaseState(
+      retracted.professionalCase,
+      active.customerId,
+    );
+  } catch (error) {
+    await db
+      .update(caseAssets)
+      .set({ deletedAt: null })
+      .where(eq(caseAssets.id, asset.id));
+    throw error;
+  }
+
+  return {
+    caseId: active.caseId,
+    direction,
     objectKey: asset.objectKey,
   };
 }

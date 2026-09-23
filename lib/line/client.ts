@@ -1,4 +1,5 @@
 import { MAX_IMAGE_BYTES, validateImageBytes } from "../file-validation";
+import type { PhotoDirection } from "../professional-case";
 
 const LINE_CONTENT_BASE_URL = "https://api-data.line.me/v2/bot/message";
 const LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply";
@@ -35,6 +36,53 @@ export function buildLineMenuMessage(): LineReplyMessage {
           label,
           data: `menu=${selection}`,
           displayText: label,
+        },
+      })),
+    },
+  };
+}
+
+export function buildLinePhotoCompletionMessage(text: string): LineReplyMessage {
+  return {
+    type: "text",
+    text,
+    quickReply: {
+      items: [
+        ["写真を変更する", "photo_change=start"],
+        ["メニューに戻る", "menu=open"],
+      ].map(([label, data]) => ({
+        type: "action" as const,
+        action: {
+          type: "postback" as const,
+          label,
+          data,
+          displayText: label,
+        },
+      })),
+    },
+  };
+}
+
+export function buildLinePhotoChangeMessage(
+  directions: PhotoDirection[],
+): LineReplyMessage {
+  const labels: Record<PhotoDirection, string> = {
+    north: "北の写真",
+    east: "東の写真",
+    south: "南の写真",
+    west: "西の写真",
+  };
+  return {
+    type: "text",
+    text: "変更する写真を選んでください。",
+    quickReply: {
+      items: directions.map((direction) => ({
+        type: "action" as const,
+        action: {
+          type: "postback" as const,
+          label: labels[direction],
+          data: `photo_change=${direction}`,
+          displayText: `${labels[direction]}を変更する`,
         },
       })),
     },
@@ -98,4 +146,18 @@ export async function replyLineText(
 
 export async function replyLineMenu(replyToken: string): Promise<void> {
   await replyLineMessages(replyToken, [buildLineMenuMessage()]);
+}
+
+export async function replyLinePhotoCompletion(
+  replyToken: string,
+  text: string,
+): Promise<void> {
+  await replyLineMessages(replyToken, [buildLinePhotoCompletionMessage(text)]);
+}
+
+export async function replyLinePhotoChangeMenu(
+  replyToken: string,
+  directions: PhotoDirection[],
+): Promise<void> {
+  await replyLineMessages(replyToken, [buildLinePhotoChangeMessage(directions)]);
 }

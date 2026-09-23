@@ -10,16 +10,26 @@ import {
   updateLineMenuStep,
 } from "@/lib/db/line-menu-repository";
 import {
+  getLinePhotoChangeOptions,
   getOrCreateLinePhotoCase,
+  retractLinePhotoDirection,
   retractLatestLinePhoto,
   saveLinePhotoAsset,
   updateLineEventStatus,
 } from "@/lib/db/line-photo-repository";
-import { fetchLineImage, replyLineMenu, replyLineText } from "@/lib/line/client";
+import {
+  fetchLineImage,
+  replyLineMenu,
+  replyLinePhotoChangeMenu,
+  replyLinePhotoCompletion,
+  replyLineText,
+} from "@/lib/line/client";
 import {
   buildLineIntakeObjectKey,
   buildMenuSelectionMessage,
+  isLineMenuOpenPostback,
   isLineMenuCommand,
+  parsePhotoChangePostback,
   parseLineMenuPostback,
   type LineIntakeAssetKind,
 } from "@/lib/line/menu";
@@ -27,6 +37,7 @@ import {
   buildLinePhotoObjectKey,
   buildPhotoReceiptMessage,
   buildPhotoRetakeMessage,
+  directionFromCaseStatus,
   isPhotoRetakeCommand,
 } from "@/lib/line/photo-flow";
 import {
@@ -140,6 +151,109 @@ export async function POST(request: Request) {
           await replyLineMenu(event.replyToken);
         } catch {
           console.error("Failed to send LINE menu");
+        }
+        continue;
+      }
+
+      if (
+        event.type === "postback" &&
+        isLineMenuOpenPostback(event.postback?.data) &&
+        event.source?.userId &&
+        event.replyToken
+      ) {
+        await clearLineMenuSelection(event.source.userId);
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processed",
+        });
+        try {
+          await replyLineMenu(event.replyToken);
+        } catch {
+          console.error("Failed to reopen LINE menu");
+        }
+        continue;
+      }
+
+      const photoChange = parsePhotoChangePostback(event.postback?.data);
+      if (
+        event.type === "postback" &&
+        photoChange &&
+        event.source?.userId &&
+        event.replyToken
+      ) {
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processing",
+        });
+        try {
+          if (photoChange === "start") {
+            const directions = await getLinePhotoChangeOptions(
+              event.source.userId,
+            );
+            await updateLineEventStatus({
+              eventId: event.webhookEventId,
+              status: "processed",
+            });
+            try {
+              if (directions.length > 0) {
+                await replyLinePhotoChangeMenu(event.replyToken, directions);
+              } else {
+                await replyLineText(
+                  event.replyToken,
+                  "変更できるお部屋の写真がありません。",
+                );
+              }
+            } catch {
+              console.error("Failed to send LINE photo change menu");
+            }
+          } else {
+            const retracted = await retractLinePhotoDirection(
+              event.source.userId,
+              photoChange,
+            );
+            if (retracted) {
+              try {
+                await deletePrivateObject(retracted.objectKey);
+              } catch {
+                console.error("Failed to delete selected LINE image object");
+              }
+              await updateLineEventStatus({
+                eventId: event.webhookEventId,
+                status: "processed",
+                caseId: retracted.caseId,
+              });
+              try {
+                await replyLineText(
+                  event.replyToken,
+                  buildPhotoRetakeMessage(retracted.direction),
+                );
+              } catch {
+                console.error("Failed to send selected LINE retake receipt");
+              }
+            } else {
+              await updateLineEventStatus({
+                eventId: event.webhookEventId,
+                status: "processed",
+              });
+              try {
+                await replyLineText(
+                  event.replyToken,
+                  "選択した写真は変更できません。もう一度メニューから選んでください。",
+                );
+              } catch {
+                console.error("Failed to send unavailable photo reply");
+              }
+            }
+          }
+        } catch (error) {
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "error",
+            errorCode: "photo_change_failed",
+          });
+          console.error("Failed to change selected LINE photo", {
+            error: error instanceof Error ? error.name : "UnknownError",
+          });
         }
         continue;
       }
@@ -474,7 +588,7 @@ export async function POST(request: Request) {
           bytes: image.bytes,
           contentType: image.mediaType,
         });
-        await saveLinePhotoAsset({
+        const nextCase = await saveLinePhotoAsset({
           assetId,
           objectKey,
           mediaType: image.mediaType,
@@ -491,10 +605,13 @@ export async function POST(request: Request) {
         });
         photoSaved = true;
         try {
-          await replyLineText(
-            event.replyToken,
-            buildPhotoReceiptMessage(direction),
-          );
+          const nextDirection = directionFromCaseStatus(nextCase.status);
+          const receipt = buildPhotoReceiptMessage(direction, nextDirection);
+          if (nextCase.status === "professional_review") {
+            await replyLinePhotoCompletion(event.replyToken, receipt);
+          } else {
+            await replyLineText(event.replyToken, receipt);
+          }
         } catch (error) {
           console.error("Failed to send LINE photo receipt", {
             error: error instanceof Error ? error.name : "UnknownError",
