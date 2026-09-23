@@ -1,5 +1,6 @@
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -53,4 +54,19 @@ export async function putPrivateObject(args: {
 export async function deletePrivateObject(key: string): Promise<void> {
   const { bucket, client } = getStorageConfig();
   await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+}
+
+export async function getPrivateObject(key: string): Promise<{
+  bytes: Uint8Array;
+  contentType: string;
+}> {
+  const { bucket, client } = getStorageConfig();
+  const response = await client.send(
+    new GetObjectCommand({ Bucket: bucket, Key: key }),
+  );
+  if (!response.Body) throw new Error("Private object body is unavailable.");
+  return {
+    bytes: await response.Body.transformToByteArray(),
+    contentType: response.ContentType ?? "application/octet-stream",
+  };
 }

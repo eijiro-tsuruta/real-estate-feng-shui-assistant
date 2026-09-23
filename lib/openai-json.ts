@@ -49,11 +49,25 @@ export class OpenAIRequestError extends Error {
 export async function requestOpenAIJson<T>(args: {
   prompt: string;
   schema: z.ZodType<T>;
-  image: { bytes: Uint8Array; mediaType: string };
+  image?: { bytes: Uint8Array; mediaType: string; label?: string };
+  images?: Array<{ bytes: Uint8Array; mediaType: string; label?: string }>;
   maxTokens?: number;
 }): Promise<T> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured.");
+  const images = args.images ?? (args.image ? [args.image] : []);
+  if (images.length === 0) throw new Error("At least one image is required.");
+
+  const imageContent = images.flatMap((image, index) => [
+    {
+      type: "input_text",
+      text: image.label ?? `画像${index + 1}`,
+    },
+    {
+      type: "input_image",
+      image_url: `data:${image.mediaType};base64,${Buffer.from(image.bytes).toString("base64")}`,
+    },
+  ]);
 
   const response = await fetch(OPENAI_RESPONSES_URL, {
     method: "POST",
@@ -78,10 +92,7 @@ export async function requestOpenAIJson<T>(args: {
         {
           role: "user",
           content: [
-            {
-              type: "input_image",
-              image_url: `data:${args.image.mediaType};base64,${Buffer.from(args.image.bytes).toString("base64")}`,
-            },
+            ...imageContent,
             { type: "input_text", text: args.prompt },
           ],
         },

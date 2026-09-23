@@ -10,12 +10,21 @@ export const lineMenuSelections = [
 export type LineMenuSelection = (typeof lineMenuSelections)[number];
 export type LineMenuStep =
   | "awaiting_floorplan"
+  | "awaiting_room_type"
   | "awaiting_room_photo"
   | "awaiting_wall_photo"
   | "awaiting_wall_style"
   | "complete";
 
 export type LineIntakeAssetKind = "floorplan" | "wall" | "wallpaper";
+export const roomTypes = [
+  "living_room",
+  "bedroom",
+  "home_office",
+  "child_room",
+  "other",
+] as const;
+export type RoomType = (typeof roomTypes)[number];
 
 export type PhotoChangePostback = "start" | "north" | "east" | "south" | "west";
 
@@ -44,6 +53,10 @@ export function isLineMenuOpenPostback(data: string | undefined): boolean {
   return data === "menu=open";
 }
 
+export function isRoomAdvicePostback(data: string | undefined): boolean {
+  return data === "room_advice=start";
+}
+
 export function parsePhotoChangePostback(
   data: string | undefined,
 ): PhotoChangePostback | null {
@@ -52,12 +65,30 @@ export function parsePhotoChangePostback(
   return (match?.[1] as PhotoChangePostback | undefined) ?? null;
 }
 
+export function parseRoomTypePostback(data: string | undefined): RoomType | null {
+  if (!data) return null;
+  const match = /^room_type=(living_room|bedroom|home_office|child_room|other)$/.exec(
+    data,
+  );
+  return (match?.[1] as RoomType | undefined) ?? null;
+}
+
+export function roomTypeLabel(roomType: RoomType): string {
+  return {
+    living_room: "リビング",
+    bedroom: "寝室",
+    home_office: "仕事部屋",
+    child_room: "子ども部屋",
+    other: "その他の部屋",
+  }[roomType];
+}
+
 export function initialStepForMenu(
   selection: LineMenuSelection,
 ): LineMenuStep {
   return {
     building_feng_shui: "awaiting_floorplan",
-    room_feng_shui: "awaiting_room_photo",
+    room_feng_shui: "awaiting_room_type",
     wall_image: "awaiting_wall_photo",
   }[selection] as LineMenuStep;
 }
@@ -85,7 +116,7 @@ export function buildMenuSelectionMessage(selection: LineMenuSelection): string 
     return "建物間取り風水ですね。\n建物の間取り図をアップしてください。";
   }
   if (selection === "room_feng_shui") {
-    return "お部屋の風水ですね。\n指示に従って、北・東・南・西の順に写真をアップしてください。";
+    return "お部屋の風水ですね。\n診断する一つの部屋を選んでください。";
   }
   return "壁のイメージですね。\nイメージを変更したい壁の写真をアップしてください。";
 }

@@ -22,6 +22,7 @@ import {
   replyLineMenu,
   replyLinePhotoChangeMenu,
   replyLinePhotoCompletion,
+  replyLineRoomTypeMenu,
   replyLineText,
 } from "@/lib/line/client";
 import {
@@ -29,8 +30,11 @@ import {
   buildMenuSelectionMessage,
   isLineMenuOpenPostback,
   isLineMenuCommand,
+  isRoomAdvicePostback,
   parsePhotoChangePostback,
   parseLineMenuPostback,
+  parseRoomTypePostback,
+  roomTypeLabel,
   type LineIntakeAssetKind,
 } from "@/lib/line/menu";
 import {
@@ -40,6 +44,10 @@ import {
   directionFromCaseStatus,
   isPhotoRetakeCommand,
 } from "@/lib/line/photo-flow";
+import {
+  formatLineRoomAdvice,
+  generateLineRoomAdvice,
+} from "@/lib/line/room-advice";
 import {
   getLineEventMetadata,
   MAX_LINE_WEBHOOK_BYTES,
@@ -51,7 +59,7 @@ import { deletePrivateObject, putPrivateObject } from "@/lib/object-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 function jsonResponse(body: Record<string, unknown>, status: number) {
   return NextResponse.json(body, {
@@ -174,6 +182,63 @@ export async function POST(request: Request) {
         continue;
       }
 
+      if (
+        event.type === "postback" &&
+        isRoomAdvicePostback(event.postback?.data) &&
+        event.source?.userId &&
+        event.replyToken
+      ) {
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processing",
+        });
+        try {
+          const session = await getLineMenuSession(event.source.userId);
+          if (
+            session?.selection !== "room_feng_shui" ||
+            session.step !== "complete" ||
+            !session.roomType
+          ) {
+            throw new Error("Room advice session is incomplete.");
+          }
+          const generated = await generateLineRoomAdvice(event.source.userId);
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "processed",
+            caseId: generated.caseId,
+          });
+          try {
+            await replyLineText(
+              event.replyToken,
+              formatLineRoomAdvice(
+                roomTypeLabel(session.roomType),
+                generated.advice,
+              ),
+            );
+          } catch {
+            console.error("Failed to send LINE room advice");
+          }
+        } catch (error) {
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "error",
+            errorCode: "room_advice_failed",
+          });
+          try {
+            await replyLineText(
+              event.replyToken,
+              "お部屋のアドバイスを作成できませんでした。時間をおいて、もう一度お試しください。",
+            );
+          } catch {
+            console.error("Failed to send LINE room advice error");
+          }
+          console.error("Failed to generate LINE room advice", {
+            error: error instanceof Error ? error.name : "UnknownError",
+          });
+        }
+        continue;
+      }
+
       const photoChange = parsePhotoChangePostback(event.postback?.data);
       if (
         event.type === "postback" &&
@@ -212,6 +277,15 @@ export async function POST(request: Request) {
               photoChange,
             );
             if (retracted) {
+              const activeSession = await getLineMenuSession(
+                event.source.userId,
+              );
+              if (activeSession?.selection === "room_feng_shui") {
+                await updateLineMenuStep({
+                  lineUserId: event.source.userId,
+                  step: "awaiting_room_photo",
+                });
+              }
               try {
                 await deletePrivateObject(retracted.objectKey);
               } catch {
@@ -271,10 +345,18 @@ export async function POST(request: Request) {
         });
         try {
           await selectLineMenu(event.source.userId, menuSelection);
-          let reply = buildMenuSelectionMessage(menuSelection);
+          const reply = buildMenuSelectionMessage(menuSelection);
           if (menuSelection === "room_feng_shui") {
-            const active = await getOrCreateLinePhotoCase(event.source.userId);
-            reply = `${reply}\n現在は${directionLabels[active.direction]}の写真をお待ちしています。`;
+            await updateLineEventStatus({
+              eventId: event.webhookEventId,
+              status: "processed",
+            });
+            try {
+              await replyLineRoomTypeMenu(event.replyToken);
+            } catch {
+              console.error("Failed to send LINE room type menu");
+            }
+            continue;
           }
           await updateLineEventStatus({
             eventId: event.webhookEventId,
@@ -301,6 +383,51 @@ export async function POST(request: Request) {
       const session = event.source?.userId
         ? await getLineMenuSession(event.source.userId)
         : null;
+
+      const selectedRoomType = parseRoomTypePostback(event.postback?.data);
+      if (
+        event.type === "postback" &&
+        selectedRoomType &&
+        session?.selection === "room_feng_shui" &&
+        event.source?.userId &&
+        event.replyToken
+      ) {
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processing",
+        });
+        try {
+          await updateLineMenuStep({
+            lineUserId: event.source.userId,
+            step: "awaiting_room_photo",
+            roomType: selectedRoomType,
+          });
+          const active = await getOrCreateLinePhotoCase(event.source.userId);
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "processed",
+            caseId: active.professionalCase.id,
+          });
+          try {
+            await replyLineText(
+              event.replyToken,
+              `${roomTypeLabel(selectedRoomType)}を診断します。\n部屋の中央付近から、${directionLabels[active.direction]}の壁・窓・家具が入るように撮影してアップしてください。`,
+            );
+          } catch {
+            console.error("Failed to send LINE room photo instructions");
+          }
+        } catch (error) {
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "error",
+            errorCode: "room_type_failed",
+          });
+          console.error("Failed to select LINE room type", {
+            error: error instanceof Error ? error.name : "UnknownError",
+          });
+        }
+        continue;
+      }
 
       if (text && !session && event.replyToken) {
         await updateLineEventStatus({
@@ -421,6 +548,12 @@ export async function POST(request: Request) {
         try {
           const retracted = await retractLatestLinePhoto(event.source.userId);
           if (retracted) {
+            if (session?.selection === "room_feng_shui") {
+              await updateLineMenuStep({
+                lineUserId: event.source.userId,
+                step: "awaiting_room_photo",
+              });
+            }
             try {
               await deletePrivateObject(retracted.objectKey);
             } catch {
@@ -497,6 +630,22 @@ export async function POST(request: Request) {
           await replyLineMenu(event.replyToken);
         } catch {
           console.error("Failed to send LINE menu before image intake");
+        }
+        continue;
+      }
+
+      if (
+        session.selection === "room_feng_shui" &&
+        session.step !== "awaiting_room_photo"
+      ) {
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processed",
+        });
+        try {
+          await replyLineRoomTypeMenu(event.replyToken);
+        } catch {
+          console.error("Failed to request LINE room type before photos");
         }
         continue;
       }
@@ -598,6 +747,12 @@ export async function POST(request: Request) {
           direction,
           professionalCase,
         });
+        if (nextCase.status === "professional_review") {
+          await updateLineMenuStep({
+            lineUserId: event.source.userId,
+            step: "complete",
+          });
+        }
         await updateLineEventStatus({
           eventId: event.webhookEventId,
           status: "processed",

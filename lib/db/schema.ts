@@ -58,6 +58,7 @@ export const lineMenuSessions = pgTable(
       .references(() => customers.id, { onDelete: "cascade" }),
     selection: text("selection").notNull(),
     step: text("step").notNull(),
+    roomType: text("room_type"),
     wallStyle: text("wall_style"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -73,7 +74,11 @@ export const lineMenuSessions = pgTable(
     ),
     check(
       "line_menu_sessions_step_check",
-      sql`${table.step} in ('awaiting_floorplan', 'awaiting_room_photo', 'awaiting_wall_photo', 'awaiting_wall_style', 'complete')`,
+      sql`${table.step} in ('awaiting_floorplan', 'awaiting_room_type', 'awaiting_room_photo', 'awaiting_wall_photo', 'awaiting_wall_style', 'complete')`,
+    ),
+    check(
+      "line_menu_sessions_room_type_check",
+      sql`${table.roomType} is null or ${table.roomType} in ('living_room', 'bedroom', 'home_office', 'child_room', 'other')`,
     ),
   ],
 );

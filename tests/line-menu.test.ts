@@ -4,6 +4,7 @@ import {
   buildLineMenuMessage,
   buildLinePhotoChangeMessage,
   buildLinePhotoCompletionMessage,
+  buildLineRoomTypeMessage,
 } from "../lib/line/client";
 import {
   buildLineIntakeObjectKey,
@@ -13,6 +14,8 @@ import {
   isLineMenuCommand,
   parsePhotoChangePostback,
   parseLineMenuPostback,
+  parseRoomTypePostback,
+  roomTypeLabel,
 } from "../lib/line/menu";
 
 test("固定IDのメニューポストバックを解釈する", () => {
@@ -29,7 +32,7 @@ test("写真完了後に変更とメニューのボタンを表示する", () =>
   const message = buildLinePhotoCompletionMessage("受付完了");
   assert.deepEqual(
     message.quickReply?.items.map((item) => item.action.data),
-    ["photo_change=start", "menu=open"],
+    ["room_advice=start", "photo_change=start", "menu=open"],
   );
   assert.equal(isLineMenuOpenPostback("menu=open"), true);
 });
@@ -60,8 +63,25 @@ test("3つのメニューをクイックリプライボタンで表示する", (
 
 test("各メニューを専用の受付状態へ進める", () => {
   assert.equal(initialStepForMenu("building_feng_shui"), "awaiting_floorplan");
-  assert.equal(initialStepForMenu("room_feng_shui"), "awaiting_room_photo");
+  assert.equal(initialStepForMenu("room_feng_shui"), "awaiting_room_type");
   assert.equal(initialStepForMenu("wall_image"), "awaiting_wall_photo");
+});
+
+test("お部屋の風水は部屋種別を固定IDで選択する", () => {
+  assert.equal(parseRoomTypePostback("room_type=living_room"), "living_room");
+  assert.equal(parseRoomTypePostback("room_type=bedroom"), "bedroom");
+  assert.equal(parseRoomTypePostback("room_type=unknown"), null);
+  assert.equal(roomTypeLabel("home_office"), "仕事部屋");
+  assert.deepEqual(
+    buildLineRoomTypeMessage().quickReply?.items.map((item) => item.action.data),
+    [
+      "room_type=living_room",
+      "room_type=bedroom",
+      "room_type=home_office",
+      "room_type=child_room",
+      "room_type=other",
+    ],
+  );
 });
 
 test("メニューへ戻る自由文を認識する", () => {
@@ -72,7 +92,7 @@ test("メニューへ戻る自由文を認識する", () => {
 
 test("選択後の案内を分岐する", () => {
   assert.match(buildMenuSelectionMessage("building_feng_shui"), /間取り図/);
-  assert.match(buildMenuSelectionMessage("room_feng_shui"), /北・東・南・西/);
+  assert.match(buildMenuSelectionMessage("room_feng_shui"), /一つの部屋/);
   assert.match(buildMenuSelectionMessage("wall_image"), /壁の写真/);
 });
 

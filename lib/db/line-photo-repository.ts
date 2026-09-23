@@ -9,13 +9,17 @@ import {
   type ProfessionalCase,
 } from "../professional-case";
 import { directionFromCaseStatus } from "../line/photo-flow";
+import type { RoomType } from "../line/menu";
+import type { RoomAdvice } from "../room-advice-schema";
 import { getDatabase } from "./client";
 import {
   caseAssets,
   cases,
   customers,
   lineEvents,
+  lineMenuSessions,
   professionals,
+  reports,
 } from "./schema";
 import {
   getProfessionalCaseState,
@@ -328,6 +332,85 @@ export async function retractLinePhotoDirection(
     direction,
     objectKey: asset.objectKey,
   };
+}
+
+export async function getLineRoomAdviceContext(lineUserId: string): Promise<{
+  caseId: string;
+  roomType: RoomType;
+  images: Array<{
+    direction: PhotoDirection;
+    objectKey: string;
+    mediaType: string;
+  }>;
+} | null> {
+  const db = getDatabase();
+  const [context] = await db
+    .select({
+      caseId: cases.id,
+      roomType: lineMenuSessions.roomType,
+    })
+    .from(cases)
+    .innerJoin(customers, eq(cases.customerId, customers.id))
+    .innerJoin(
+      lineMenuSessions,
+      eq(lineMenuSessions.customerId, customers.id),
+    )
+    .where(
+      and(
+        eq(customers.lineUserId, lineUserId),
+        eq(lineMenuSessions.selection, "room_feng_shui"),
+        eq(lineMenuSessions.step, "complete"),
+        eq(cases.status, "professional_review"),
+      ),
+    )
+    .orderBy(desc(cases.updatedAt))
+    .limit(1);
+  if (!context?.roomType) return null;
+
+  const assets = await db
+    .select({
+      direction: caseAssets.kind,
+      objectKey: caseAssets.objectKey,
+      mediaType: caseAssets.mediaType,
+    })
+    .from(caseAssets)
+    .where(
+      and(
+        eq(caseAssets.caseId, context.caseId),
+        inArray(caseAssets.kind, [...PHOTO_DIRECTIONS]),
+        isNull(caseAssets.deletedAt),
+      ),
+    );
+  if (assets.length !== 4) return null;
+
+  return {
+    caseId: context.caseId,
+    roomType: context.roomType as RoomType,
+    images: PHOTO_DIRECTIONS.map((direction) => {
+      const asset = assets.find((candidate) => candidate.direction === direction);
+      if (!asset) throw new Error(`Missing ${direction} room image.`);
+      return { direction, objectKey: asset.objectKey, mediaType: asset.mediaType };
+    }),
+  };
+}
+
+export async function saveLineRoomAdvice(
+  caseId: string,
+  advice: RoomAdvice,
+): Promise<void> {
+  const db = getDatabase();
+  const [latest] = await db
+    .select({ version: reports.version })
+    .from(reports)
+    .where(eq(reports.caseId, caseId))
+    .orderBy(desc(reports.version))
+    .limit(1);
+  await db.insert(reports).values({
+    id: randomUUID(),
+    caseId,
+    version: (latest?.version ?? 0) + 1,
+    content: advice,
+  });
 }
 
 export async function updateLineEventStatus(args: {

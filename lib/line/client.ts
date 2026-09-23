@@ -1,5 +1,6 @@
 import { MAX_IMAGE_BYTES, validateImageBytes } from "../file-validation";
 import type { PhotoDirection } from "../professional-case";
+import { roomTypeLabel, roomTypes } from "./menu";
 
 const LINE_CONTENT_BASE_URL = "https://api-data.line.me/v2/bot/message";
 const LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply";
@@ -48,6 +49,7 @@ export function buildLinePhotoCompletionMessage(text: string): LineReplyMessage 
     text,
     quickReply: {
       items: [
+        ["アドバイスを作成", "room_advice=start"],
         ["写真を変更する", "photo_change=start"],
         ["メニューに戻る", "menu=open"],
       ].map(([label, data]) => ({
@@ -57,6 +59,24 @@ export function buildLinePhotoCompletionMessage(text: string): LineReplyMessage 
           label,
           data,
           displayText: label,
+        },
+      })),
+    },
+  };
+}
+
+export function buildLineRoomTypeMessage(): LineReplyMessage {
+  return {
+    type: "text",
+    text: "診断する一つの部屋を選んでください。",
+    quickReply: {
+      items: roomTypes.map((roomType) => ({
+        type: "action" as const,
+        action: {
+          type: "postback" as const,
+          label: roomTypeLabel(roomType),
+          data: `room_type=${roomType}`,
+          displayText: roomTypeLabel(roomType),
         },
       })),
     },
@@ -146,6 +166,10 @@ export async function replyLineText(
 
 export async function replyLineMenu(replyToken: string): Promise<void> {
   await replyLineMessages(replyToken, [buildLineMenuMessage()]);
+}
+
+export async function replyLineRoomTypeMenu(replyToken: string): Promise<void> {
+  await replyLineMessages(replyToken, [buildLineRoomTypeMessage()]);
 }
 
 export async function replyLinePhotoCompletion(

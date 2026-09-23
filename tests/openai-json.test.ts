@@ -73,3 +73,43 @@ test("OpenAIのJSONをレポートスキーマで検証する", async () => {
     else process.env.OPENAI_API_KEY = previousKey;
   }
 });
+
+test("複数画像を方角ラベル付きで送る", async () => {
+  const previousKey = process.env.OPENAI_API_KEY;
+  const previousFetch = globalThis.fetch;
+  let requestBody = "";
+  process.env.OPENAI_API_KEY = "test-key-not-a-secret";
+  globalThis.fetch = async (_input, init) => {
+    requestBody = String(init?.body);
+    return new Response(JSON.stringify({ output_text: '{"status":"ok"}' }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    await requestOpenAIJson({
+      prompt: "一つの部屋だけを分析する",
+      schema: z.object({ status: z.literal("ok") }),
+      images: [
+        {
+          bytes: new Uint8Array([1]),
+          mediaType: "image/jpeg",
+          label: "北側の写真",
+        },
+        {
+          bytes: new Uint8Array([2]),
+          mediaType: "image/jpeg",
+          label: "東側の写真",
+        },
+      ],
+    });
+    assert.match(requestBody, /北側の写真/);
+    assert.match(requestBody, /東側の写真/);
+    assert.equal((requestBody.match(/input_image/g) ?? []).length, 2);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+  }
+});

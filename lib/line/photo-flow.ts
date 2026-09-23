@@ -57,7 +57,7 @@ export function buildPhotoReceiptMessage(
 ): string {
   const next = nextDirection;
   if (!next) {
-    return `${directionLabels[direction]}の写真を安全に保存しました。\n4方向の写真が揃い、診断の受付が完了しました。\n担当者の確認後、このLINEに診断結果をお届けします。お客様の操作はここで完了です。`;
+    return `${directionLabels[direction]}の写真を安全に保存しました。\n一つのお部屋を診断するための4方向の写真が揃いました。\n「アドバイスを作成」を押すと、家具・植物・照明・色・素材などの具体的な提案を作成します。`;
   }
   return `${directionLabels[direction]}の写真を安全に保存しました。\n次は${directionLabels[next]}を撮影して送ってください。\n写真を間違えた場合は「撮り直し」と送ってください。`;
 }

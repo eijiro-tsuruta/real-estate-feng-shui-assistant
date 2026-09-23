@@ -29,8 +29,8 @@ test("Object StorageキーにLINEユーザーIDを直接含めない", () => {
 test("保存完了後に次の撮影方向を案内する", () => {
   assert.match(buildPhotoReceiptMessage("north"), /次は東側/);
   assert.match(buildPhotoReceiptMessage("north"), /「撮り直し」/);
-  assert.match(buildPhotoReceiptMessage("west"), /診断の受付が完了/);
-  assert.match(buildPhotoReceiptMessage("west"), /操作はここで完了/);
+  assert.match(buildPhotoReceiptMessage("west"), /4方向の写真が揃いました/);
+  assert.match(buildPhotoReceiptMessage("west"), /アドバイスを作成/);
 });
 
 test("明示的な撮り直し指示だけをコマンドとして扱う", () => {

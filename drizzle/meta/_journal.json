@@ -15,6 +15,13 @@
       "when": 1790126259405,
       "tag": "0001_strange_energizer",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790128706050,
+      "tag": "0002_reflective_molecule_man",
+      "breakpoints": true
     }
   ]
 }
