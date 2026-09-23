@@ -411,7 +411,7 @@ export async function POST(request: Request) {
           try {
             await replyLineText(
               event.replyToken,
-              `${roomTypeLabel(selectedRoomType)}を診断します。\n部屋の中央付近から、${directionLabels[active.direction]}の壁・窓・家具が入るように撮影してアップしてください。`,
+              `${roomTypeLabel(selectedRoomType)}を診断します。\n部屋の中央付近から、${directionLabels[active.direction]}の壁・窓が入るように撮影してアップしてください。`,
             );
           } catch {
             console.error("Failed to send LINE room photo instructions");
