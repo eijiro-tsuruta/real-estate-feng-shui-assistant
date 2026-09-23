@@ -19,6 +19,10 @@ const lineMessageSchema = z
   })
   .passthrough();
 
+const linePostbackSchema = z
+  .object({ data: z.string().min(1).max(1000) })
+  .passthrough();
+
 export const lineWebhookEventSchema = z
   .object({
     webhookEventId: z.string().min(1).max(100),
@@ -27,6 +31,7 @@ export const lineWebhookEventSchema = z
     replyToken: z.string().min(1).max(200).optional(),
     source: lineSourceSchema.optional(),
     message: lineMessageSchema.optional(),
+    postback: linePostbackSchema.optional(),
     deliveryContext: z
       .object({ isRedelivery: z.boolean() })
       .passthrough()

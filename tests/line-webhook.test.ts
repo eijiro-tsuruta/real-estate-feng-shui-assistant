@@ -71,6 +71,25 @@ test("LINEの接続確認用空イベントを受け付ける", () => {
   assert.deepEqual(webhook.events, []);
 });
 
+test("メニュー選択のpostbackイベントを受け付ける", () => {
+  const webhook = parseLineWebhookBody(
+    JSON.stringify({
+      destination: "Ubot",
+      events: [
+        {
+          type: "postback",
+          postback: { data: "menu=wall_image" },
+          webhookEventId: "event-postback-1",
+          timestamp: 1_795_000_000_001,
+          source: { type: "user", userId: "user-1" },
+          replyToken: "reply-token",
+        },
+      ],
+    }),
+  );
+  assert.equal(webhook.events[0].postback?.data, "menu=wall_image");
+});
+
 test("Webhook本文のSHA-256を安定して生成する", () => {
   assert.match(sha256Text(rawBody), /^[a-f0-9]{64}$/);
   assert.equal(sha256Text(rawBody), sha256Text(rawBody));

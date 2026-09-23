@@ -50,6 +50,73 @@ export const customers = pgTable(
   (table) => [uniqueIndex("customers_line_user_id_unique").on(table.lineUserId)],
 );
 
+export const lineMenuSessions = pgTable(
+  "line_menu_sessions",
+  {
+    customerId: text("customer_id")
+      .primaryKey()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    selection: text("selection").notNull(),
+    step: text("step").notNull(),
+    wallStyle: text("wall_style"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      "line_menu_sessions_selection_check",
+      sql`${table.selection} in ('building_feng_shui', 'room_feng_shui', 'wall_image')`,
+    ),
+    check(
+      "line_menu_sessions_step_check",
+      sql`${table.step} in ('awaiting_floorplan', 'awaiting_room_photo', 'awaiting_wall_photo', 'awaiting_wall_style', 'complete')`,
+    ),
+  ],
+);
+
+export const lineIntakeAssets = pgTable(
+  "line_intake_assets",
+  {
+    id: text("id").primaryKey(),
+    customerId: text("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    objectKey: text("object_key").notNull(),
+    mediaType: text("media_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    sha256: text("sha256").notNull(),
+    retainedUntil: timestamp("retained_until", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("line_intake_assets_customer_kind_unique").on(
+      table.customerId,
+      table.kind,
+    ),
+    uniqueIndex("line_intake_assets_object_key_unique").on(table.objectKey),
+    index("line_intake_assets_retention_idx").on(table.retainedUntil),
+    check(
+      "line_intake_assets_kind_check",
+      sql`${table.kind} in ('floorplan', 'wall', 'wallpaper')`,
+    ),
+    check("line_intake_assets_byte_size_check", sql`${table.byteSize} > 0`),
+    check(
+      "line_intake_assets_sha256_check",
+      sql`length(${table.sha256}) = 64`,
+    ),
+  ],
+);
+
 export const cases = pgTable(
   "cases",
   {

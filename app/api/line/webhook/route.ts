@@ -3,12 +3,26 @@ import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { recordLineEvent } from "@/lib/db/line-event-repository";
 import {
+  clearLineMenuSelection,
+  getLineMenuSession,
+  saveLineIntakeAsset,
+  selectLineMenu,
+  updateLineMenuStep,
+} from "@/lib/db/line-menu-repository";
+import {
   getOrCreateLinePhotoCase,
   retractLatestLinePhoto,
   saveLinePhotoAsset,
   updateLineEventStatus,
 } from "@/lib/db/line-photo-repository";
-import { fetchLineImage, replyLineText } from "@/lib/line/client";
+import { fetchLineImage, replyLineMenu, replyLineText } from "@/lib/line/client";
+import {
+  buildLineIntakeObjectKey,
+  buildMenuSelectionMessage,
+  isLineMenuCommand,
+  parseLineMenuPostback,
+  type LineIntakeAssetKind,
+} from "@/lib/line/menu";
 import {
   buildLinePhotoObjectKey,
   buildPhotoReceiptMessage,
@@ -34,6 +48,13 @@ function jsonResponse(body: Record<string, unknown>, status: number) {
     headers: { "Cache-Control": "no-store" },
   });
 }
+
+const directionLabels = {
+  north: "北側",
+  east: "東側",
+  south: "南側",
+  west: "西側",
+} as const;
 
 export async function POST(request: Request) {
   const channelSecret = process.env.LINE_CHANNEL_SECRET;
@@ -80,11 +101,199 @@ export async function POST(request: Request) {
       });
       if (recorded === "duplicate") continue;
 
-      const isRetake =
+      const text =
         event.type === "message" &&
         event.message?.type === "text" &&
-        typeof event.message.text === "string" &&
-        isPhotoRetakeCommand(event.message.text);
+        typeof event.message.text === "string"
+          ? event.message.text
+          : null;
+
+      if (
+        event.type === "follow" &&
+        event.source?.userId &&
+        event.replyToken
+      ) {
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processed",
+        });
+        try {
+          await replyLineMenu(event.replyToken);
+        } catch {
+          console.error("Failed to send LINE menu after follow");
+        }
+        continue;
+      }
+
+      if (
+        text &&
+        isLineMenuCommand(text) &&
+        event.replyToken &&
+        event.source?.userId
+      ) {
+        await clearLineMenuSelection(event.source.userId);
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processed",
+        });
+        try {
+          await replyLineMenu(event.replyToken);
+        } catch {
+          console.error("Failed to send LINE menu");
+        }
+        continue;
+      }
+
+      const menuSelection = parseLineMenuPostback(event.postback?.data);
+      if (
+        event.type === "postback" &&
+        menuSelection &&
+        event.source?.userId &&
+        event.replyToken
+      ) {
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processing",
+        });
+        try {
+          await selectLineMenu(event.source.userId, menuSelection);
+          let reply = buildMenuSelectionMessage(menuSelection);
+          if (menuSelection === "room_feng_shui") {
+            const active = await getOrCreateLinePhotoCase(event.source.userId);
+            reply = `${reply}\n現在は${directionLabels[active.direction]}の写真をお待ちしています。`;
+          }
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "processed",
+          });
+          try {
+            await replyLineText(event.replyToken, reply);
+          } catch {
+            console.error("Failed to send LINE menu selection reply");
+          }
+        } catch (error) {
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "error",
+            errorCode: "menu_selection_failed",
+          });
+          console.error("Failed to select LINE menu", {
+            error: error instanceof Error ? error.name : "UnknownError",
+          });
+        }
+        continue;
+      }
+
+      const session = event.source?.userId
+        ? await getLineMenuSession(event.source.userId)
+        : null;
+
+      if (text && !session && event.replyToken) {
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processed",
+        });
+        try {
+          await replyLineMenu(event.replyToken);
+        } catch {
+          console.error("Failed to send LINE initial menu");
+        }
+        continue;
+      }
+
+      if (
+        text &&
+        !isPhotoRetakeCommand(text) &&
+        session?.selection === "wall_image" &&
+        session.step === "awaiting_wall_style" &&
+        event.replyToken &&
+        event.source?.userId
+      ) {
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processing",
+        });
+        try {
+          await updateLineMenuStep({
+            lineUserId: event.source.userId,
+            step: "complete",
+            wallStyle: text.normalize("NFKC").trim().slice(0, 1000),
+          });
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "processed",
+          });
+          try {
+            await replyLineText(
+              event.replyToken,
+              "ご希望の色・雰囲気を受け付けました。壁のイメージ作成に使用します。",
+            );
+          } catch {
+            console.error("Failed to send LINE wall style receipt");
+          }
+        } catch (error) {
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "error",
+            errorCode: "wall_style_failed",
+          });
+          console.error("Failed to save LINE wall style", {
+            error: error instanceof Error ? error.name : "UnknownError",
+          });
+        }
+        continue;
+      }
+
+      const isRetake =
+        text !== null && isPhotoRetakeCommand(text);
+
+      if (
+        isRetake &&
+        session &&
+        session.selection !== "room_feng_shui" &&
+        event.source?.userId &&
+        event.replyToken
+      ) {
+        const step =
+          session.selection === "building_feng_shui"
+            ? "awaiting_floorplan"
+            : "awaiting_wall_photo";
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processing",
+        });
+        try {
+          await updateLineMenuStep({
+            lineUserId: event.source.userId,
+            step,
+            wallStyle: null,
+          });
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "processed",
+          });
+          try {
+            await replyLineText(
+              event.replyToken,
+              session.selection === "building_feng_shui"
+                ? "間取り図をもう一度アップしてください。"
+                : "イメージを変更したい壁の写真をもう一度アップしてください。",
+            );
+          } catch {
+            console.error("Failed to send LINE intake retake reply");
+          }
+        } catch (error) {
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "error",
+            errorCode: "intake_retake_failed",
+          });
+          console.error("Failed to reset LINE intake", {
+            error: error instanceof Error ? error.name : "UnknownError",
+          });
+        }
+        continue;
+      }
 
       if (
         isRetake &&
@@ -165,6 +374,19 @@ export async function POST(request: Request) {
         continue;
       }
 
+      if (!session) {
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "ignored",
+        });
+        try {
+          await replyLineMenu(event.replyToken);
+        } catch {
+          console.error("Failed to send LINE menu before image intake");
+        }
+        continue;
+      }
+
       await updateLineEventStatus({
         eventId: event.webhookEventId,
         status: "processing",
@@ -174,6 +396,69 @@ export async function POST(request: Request) {
       let photoSaved = false;
       try {
         const image = await fetchLineImage(event.message.id);
+        if (
+          session.selection === "building_feng_shui" ||
+          session.selection === "wall_image"
+        ) {
+          const kind: LineIntakeAssetKind =
+            session.selection === "building_feng_shui"
+              ? "floorplan"
+              : session.step === "awaiting_wall_style"
+                ? "wallpaper"
+                : "wall";
+          const assetId = randomUUID();
+          objectKey = buildLineIntakeObjectKey({
+            lineUserId: event.source.userId,
+            kind,
+            assetId,
+            mediaType: image.mediaType,
+          });
+          await putPrivateObject({
+            key: objectKey,
+            bytes: image.bytes,
+            contentType: image.mediaType,
+          });
+          const { previousObjectKey } = await saveLineIntakeAsset({
+            id: assetId,
+            lineUserId: event.source.userId,
+            kind,
+            objectKey,
+            mediaType: image.mediaType,
+            byteSize: image.bytes.byteLength,
+            sha256: createHash("sha256").update(image.bytes).digest("hex"),
+          });
+          photoSaved = true;
+          if (previousObjectKey && previousObjectKey !== objectKey) {
+            try {
+              await deletePrivateObject(previousObjectKey);
+            } catch {
+              console.error("Failed to delete replaced LINE intake image");
+            }
+          }
+          const nextStep =
+            kind === "wall" ? "awaiting_wall_style" : "complete";
+          await updateLineMenuStep({
+            lineUserId: event.source.userId,
+            step: nextStep,
+          });
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "processed",
+          });
+          const reply =
+            kind === "floorplan"
+              ? "間取り図を安全に保存しました。建物間取り風水の確認に使用します。"
+              : kind === "wallpaper"
+                ? "壁紙の画像を安全に保存しました。壁のイメージ作成に使用します。"
+                : "壁の写真を安全に保存しました。\n使いたい壁紙があれば画像をアップしてください。壁紙がなければ、希望する色や雰囲気を文章で送ってください。";
+          try {
+            await replyLineText(event.replyToken, reply);
+          } catch {
+            console.error("Failed to send LINE intake receipt");
+          }
+          continue;
+        }
+
         const { customerId, direction, professionalCase } =
           await getOrCreateLinePhotoCase(event.source.userId);
         const assetId = randomUUID();
