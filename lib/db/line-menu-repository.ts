@@ -126,7 +126,7 @@ export async function saveLineIntakeAsset(args: {
   mediaType: string;
   byteSize: number;
   sha256: string;
-}): Promise<{ previousObjectKey: string | null }> {
+}): Promise<{ previousObjectKey: string | null; assetId: string }> {
   const db = getDatabase();
   const customerId = await ensureLineCustomer(args.lineUserId);
   const [existing] = await db
@@ -152,7 +152,7 @@ export async function saveLineIntakeAsset(args: {
         updatedAt: new Date(),
       })
       .where(eq(lineIntakeAssets.id, existing.id));
-    return { previousObjectKey: existing.objectKey };
+    return { previousObjectKey: existing.objectKey, assetId: existing.id };
   }
   await db.insert(lineIntakeAssets).values({
     id: args.id,
@@ -164,7 +164,26 @@ export async function saveLineIntakeAsset(args: {
     sha256: args.sha256,
     retainedUntil,
   });
-  return { previousObjectKey: null };
+  return { previousObjectKey: null, assetId: args.id };
+}
+
+export async function getLineIntakeAssetById(id: string) {
+  const [asset] = await getDatabase()
+    .select({
+      objectKey: lineIntakeAssets.objectKey,
+      mediaType: lineIntakeAssets.mediaType,
+      retainedUntil: lineIntakeAssets.retainedUntil,
+    })
+    .from(lineIntakeAssets)
+    .where(
+      and(
+        eq(lineIntakeAssets.id, id),
+        eq(lineIntakeAssets.kind, "wall_result"),
+      ),
+    )
+    .limit(1);
+  if (!asset || asset.retainedUntil <= new Date()) return null;
+  return asset;
 }
 
 export async function getLineIntakeAsset(

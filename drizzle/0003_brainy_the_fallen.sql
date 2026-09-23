@@ -1,0 +1,2 @@
+ALTER TABLE "line_intake_assets" DROP CONSTRAINT "line_intake_assets_kind_check";--> statement-breakpoint
+ALTER TABLE "line_intake_assets" ADD CONSTRAINT "line_intake_assets_kind_check" CHECK ("line_intake_assets"."kind" in ('floorplan', 'wall', 'wallpaper', 'wall_result'));

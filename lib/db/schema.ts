@@ -112,7 +112,7 @@ export const lineIntakeAssets = pgTable(
     index("line_intake_assets_retention_idx").on(table.retainedUntil),
     check(
       "line_intake_assets_kind_check",
-      sql`${table.kind} in ('floorplan', 'wall', 'wallpaper')`,
+      sql`${table.kind} in ('floorplan', 'wall', 'wallpaper', 'wall_result')`,
     ),
     check("line_intake_assets_byte_size_check", sql`${table.byteSize} > 0`),
     check(

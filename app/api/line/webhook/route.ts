@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { recordLineEvent } from "@/lib/db/line-event-repository";
@@ -28,6 +28,8 @@ import {
   replyLinePhotoCompletion,
   replyLineRoomTypeMenu,
   replyLineText,
+  replyLineWallMethodMenu,
+  replyLineWallTargetMenu,
 } from "@/lib/line/client";
 import {
   formatLineBuildingAdvice,
@@ -57,6 +59,13 @@ import {
   formatLineRoomAdvice,
   generateLineRoomAdvice,
 } from "@/lib/line/room-advice";
+import { generateAndDeliverWallImage } from "@/lib/line/wall-image";
+import {
+  encodeWallImageState,
+  parseWallImageState,
+  parseWallMethodPostback,
+  parseWallTargetPostback,
+} from "@/lib/line/wall-image-flow";
 import {
   getLineEventMetadata,
   isLineImageUploadMessage,
@@ -73,7 +82,7 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 function jsonResponse(body: Record<string, unknown>, status: number) {
   return NextResponse.json(body, {
@@ -372,6 +381,18 @@ export async function POST(request: Request) {
             }
             continue;
           }
+          if (menuSelection === "wall_image") {
+            await updateLineEventStatus({
+              eventId: event.webhookEventId,
+              status: "processed",
+            });
+            try {
+              await replyLineWallTargetMenu(event.replyToken);
+            } catch {
+              console.error("Failed to send LINE wall target menu");
+            }
+            continue;
+          }
           await updateLineEventStatus({
             eventId: event.webhookEventId,
             status: "processed",
@@ -397,6 +418,104 @@ export async function POST(request: Request) {
       const session = event.source?.userId
         ? await getLineMenuSession(event.source.userId)
         : null;
+
+      const wallTarget = parseWallTargetPostback(event.postback?.data);
+      if (
+        event.type === "postback" &&
+        wallTarget &&
+        session?.selection === "wall_image" &&
+        event.source?.userId &&
+        event.replyToken
+      ) {
+        await updateLineMenuStep({
+          lineUserId: event.source.userId,
+          step: "awaiting_wall_photo",
+          wallStyle: encodeWallImageState({ target: wallTarget }),
+        });
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processed",
+        });
+        try {
+          const label =
+            wallTarget === "interior_wall"
+              ? "室内の壁"
+              : wallTarget === "exterior_wall"
+                ? "建物の外壁"
+                : "玄関ドア";
+          await replyLineText(
+            event.replyToken,
+            `${label}全体がわかる写真をアップしてください。`,
+          );
+        } catch {
+          console.error("Failed to send LINE wall photo instruction");
+        }
+        continue;
+      }
+
+      const wallMethod = parseWallMethodPostback(event.postback?.data);
+      if (
+        event.type === "postback" &&
+        wallMethod &&
+        session?.selection === "wall_image" &&
+        event.source?.userId &&
+        event.replyToken
+      ) {
+        const lineUserId = event.source.userId;
+        const state = {
+          ...parseWallImageState(session.wallStyle),
+          method: wallMethod,
+        };
+        if (!state.target || session.step !== "awaiting_wall_style") {
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "processed",
+          });
+          await replyLineWallTargetMenu(event.replyToken);
+          continue;
+        }
+        await updateLineMenuStep({
+          lineUserId,
+          step: wallMethod === "ai" ? "complete" : "awaiting_wall_style",
+          wallStyle: encodeWallImageState(state),
+        });
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processed",
+        });
+        if (wallMethod === "words") {
+          await replyLineText(
+            event.replyToken,
+            "希望する色や雰囲気を言葉で送ってください。\n例：明るいアイボリー、落ち着いた深緑、赤い玄関ドア",
+          );
+        } else if (wallMethod === "reference") {
+          await replyLineText(
+            event.replyToken,
+            "色・柄・雰囲気の参考にする画像をアップしてください。",
+          );
+        } else {
+          await replyLineText(
+            event.replyToken,
+            "AIが調和する仕上がりを提案します。イメージを作成しておりますので、しばらくお待ちください。",
+          );
+          const origin = new URL(request.url).origin;
+          after(async () => {
+            try {
+              await generateAndDeliverWallImage({ lineUserId, state, origin });
+            } catch {
+              try {
+                await pushLineText(
+                  lineUserId,
+                  "イメージを作成できませんでした。もう一度お試しください。",
+                );
+              } catch {
+                console.error("Failed to send LINE wall image error");
+              }
+            }
+          });
+        }
+        continue;
+      }
 
       const floorPlanNorth = parseFloorPlanNorthPostback(event.postback?.data);
       if (
@@ -540,15 +659,29 @@ export async function POST(request: Request) {
         event.replyToken &&
         event.source?.userId
       ) {
+        const lineUserId = event.source.userId;
+        const state = parseWallImageState(session.wallStyle);
         await updateLineEventStatus({
           eventId: event.webhookEventId,
           status: "processing",
         });
         try {
+          if (state.method !== "words" || !state.target) {
+            await updateLineEventStatus({
+              eventId: event.webhookEventId,
+              status: "processed",
+            });
+            await replyLineWallMethodMenu(event.replyToken);
+            continue;
+          }
+          const completedState = {
+            ...state,
+            description: text.normalize("NFKC").trim().slice(0, 1000),
+          };
           await updateLineMenuStep({
-            lineUserId: event.source.userId,
+            lineUserId,
             step: "complete",
-            wallStyle: text.normalize("NFKC").trim().slice(0, 1000),
+            wallStyle: encodeWallImageState(completedState),
           });
           await updateLineEventStatus({
             eventId: event.webhookEventId,
@@ -557,11 +690,30 @@ export async function POST(request: Request) {
           try {
             await replyLineText(
               event.replyToken,
-              "ご希望の色・雰囲気を受け付けました。壁のイメージ作成に使用します。",
+              "ご希望を受け付けました。イメージを作成しておりますので、しばらくお待ちください。",
             );
           } catch {
             console.error("Failed to send LINE wall style receipt");
           }
+          const origin = new URL(request.url).origin;
+          after(async () => {
+            try {
+              await generateAndDeliverWallImage({
+                lineUserId,
+                state: completedState,
+                origin,
+              });
+            } catch {
+              try {
+                await pushLineText(
+                  lineUserId,
+                  "イメージを作成できませんでした。もう一度お試しください。",
+                );
+              } catch {
+                console.error("Failed to send LINE wall image error");
+              }
+            }
+          });
         } catch (error) {
           await updateLineEventStatus({
             eventId: event.webhookEventId,
@@ -589,6 +741,7 @@ export async function POST(request: Request) {
           session.selection === "building_feng_shui"
             ? "awaiting_floorplan"
             : "awaiting_wall_photo";
+        const wallState = parseWallImageState(session.wallStyle);
         await updateLineEventStatus({
           eventId: event.webhookEventId,
           status: "processing",
@@ -597,7 +750,10 @@ export async function POST(request: Request) {
           await updateLineMenuStep({
             lineUserId: event.source.userId,
             step,
-            wallStyle: null,
+            wallStyle:
+              session.selection === "wall_image" && wallState.target
+                ? encodeWallImageState({ target: wallState.target })
+                : null,
           });
           await updateLineEventStatus({
             eventId: event.webhookEventId,
@@ -742,6 +898,39 @@ export async function POST(request: Request) {
         continue;
       }
 
+      const wallState =
+        session.selection === "wall_image"
+          ? parseWallImageState(session.wallStyle)
+          : null;
+      if (session.selection === "wall_image" && !wallState?.target) {
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processed",
+        });
+        try {
+          await replyLineWallTargetMenu(event.replyToken);
+        } catch {
+          console.error("Failed to request LINE wall target before photo");
+        }
+        continue;
+      }
+      if (
+        session.selection === "wall_image" &&
+        session.step === "awaiting_wall_style" &&
+        wallState?.method !== "reference"
+      ) {
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processed",
+        });
+        try {
+          await replyLineWallMethodMenu(event.replyToken);
+        } catch {
+          console.error("Failed to request LINE wall method before reference");
+        }
+        continue;
+      }
+
       await updateLineEventStatus({
         eventId: event.webhookEventId,
         status: "processing",
@@ -758,7 +947,8 @@ export async function POST(request: Request) {
           const kind: LineIntakeAssetKind =
             session.selection === "building_feng_shui"
               ? "floorplan"
-              : session.step === "awaiting_wall_style"
+              : session.step === "awaiting_wall_style" &&
+                  wallState?.method === "reference"
                 ? "wallpaper"
                 : "wall";
           const assetId = randomUUID();
@@ -847,14 +1037,42 @@ export async function POST(request: Request) {
             eventId: event.webhookEventId,
             status: "processed",
           });
-          const reply =
-            kind === "wallpaper"
-                ? "壁紙の画像を安全に保存しました。壁のイメージ作成に使用します。"
-                : "壁の写真を安全に保存しました。\n使いたい壁紙があれば画像をアップしてください。壁紙がなければ、希望する色や雰囲気を文章で送ってください。";
-          try {
-            await replyLineText(event.replyToken, reply);
-          } catch {
-            console.error("Failed to send LINE intake receipt");
+          if (kind === "wall") {
+            try {
+              await replyLineWallMethodMenu(event.replyToken);
+            } catch {
+              console.error("Failed to send LINE wall method menu");
+            }
+          } else {
+            try {
+              await replyLineText(
+                event.replyToken,
+                "参考画像を保存しました。イメージを作成しておりますので、しばらくお待ちください。",
+              );
+            } catch {
+              console.error("Failed to send LINE reference receipt");
+            }
+            const lineUserId = event.source.userId;
+            const origin = new URL(request.url).origin;
+            const state = wallState;
+            after(async () => {
+              try {
+                await generateAndDeliverWallImage({
+                  lineUserId,
+                  state: state ?? {},
+                  origin,
+                });
+              } catch {
+                try {
+                  await pushLineText(
+                    lineUserId,
+                    "イメージを作成できませんでした。もう一度お試しください。",
+                  );
+                } catch {
+                  console.error("Failed to send LINE wall image error");
+                }
+              }
+            });
           }
           continue;
         }

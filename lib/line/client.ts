@@ -1,12 +1,13 @@
 import { MAX_IMAGE_BYTES, validateImageBytes } from "../file-validation";
 import type { PhotoDirection } from "../professional-case";
 import { roomTypeLabel, roomTypes } from "./menu";
+import { wallTargetLabel, wallTargets } from "./wall-image-flow";
 
 const LINE_CONTENT_BASE_URL = "https://api-data.line.me/v2/bot/message";
 const LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply";
 const LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push";
 
-type LineReplyMessage = {
+type LineTextMessage = {
   type: "text";
   text: string;
   quickReply?: {
@@ -21,8 +22,15 @@ type LineReplyMessage = {
     }>;
   };
 };
+type LineMessage =
+  | LineTextMessage
+  | {
+      type: "image";
+      originalContentUrl: string;
+      previewImageUrl: string;
+    };
 
-export function buildLineMenuMessage(): LineReplyMessage {
+export function buildLineMenuMessage(): LineTextMessage {
   return {
     type: "text",
     text: "ご希望のメニューを選んでください。",
@@ -44,7 +52,7 @@ export function buildLineMenuMessage(): LineReplyMessage {
   };
 }
 
-export function buildLinePhotoCompletionMessage(text: string): LineReplyMessage {
+export function buildLinePhotoCompletionMessage(text: string): LineTextMessage {
   return {
     type: "text",
     text,
@@ -66,7 +74,7 @@ export function buildLinePhotoCompletionMessage(text: string): LineReplyMessage 
   };
 }
 
-export function buildLineRoomTypeMessage(): LineReplyMessage {
+export function buildLineRoomTypeMessage(): LineTextMessage {
   return {
     type: "text",
     text: "診断する一つの部屋を選んでください。",
@@ -84,7 +92,47 @@ export function buildLineRoomTypeMessage(): LineReplyMessage {
   };
 }
 
-export function buildLineNorthConfirmationMessage(): LineReplyMessage {
+export function buildLineWallTargetMessage(): LineTextMessage {
+  return {
+    type: "text",
+    text: "イメージを変更する場所を選んでください。",
+    quickReply: {
+      items: wallTargets.map((target) => ({
+        type: "action" as const,
+        action: {
+          type: "postback" as const,
+          label: wallTargetLabel(target),
+          data: `wall_target=${target}`,
+          displayText: wallTargetLabel(target),
+        },
+      })),
+    },
+  };
+}
+
+export function buildLineWallMethodMessage(): LineTextMessage {
+  return {
+    type: "text",
+    text: "仕上がりの希望をどのように伝えますか？",
+    quickReply: {
+      items: [
+        ["言葉でイメージを伝える", "wall_method=words"],
+        ["参考画像を送る", "wall_method=reference"],
+        ["AIに提案してもらう", "wall_method=ai"],
+      ].map(([label, data]) => ({
+        type: "action" as const,
+        action: {
+          type: "postback" as const,
+          label,
+          data,
+          displayText: label,
+        },
+      })),
+    },
+  };
+}
+
+export function buildLineNorthConfirmationMessage(): LineTextMessage {
   return {
     type: "text",
     text: "方位マークを確認できませんでした。図面の上を北として診断してよいですか？",
@@ -106,7 +154,7 @@ export function buildLineNorthConfirmationMessage(): LineReplyMessage {
   };
 }
 
-export function buildLineNorthDirectionMessage(): LineReplyMessage {
+export function buildLineNorthDirectionMessage(): LineTextMessage {
   const directions = [
     ["上", "up"],
     ["右上", "upRight"],
@@ -136,7 +184,7 @@ export function buildLineNorthDirectionMessage(): LineReplyMessage {
 
 export function buildLinePhotoChangeMessage(
   directions: PhotoDirection[],
-): LineReplyMessage {
+): LineTextMessage {
   const labels: Record<PhotoDirection, string> = {
     north: "北の写真",
     east: "東の写真",
@@ -189,7 +237,7 @@ export async function fetchLineImage(messageId: string) {
 
 async function replyLineMessages(
   replyToken: string,
-  messages: LineReplyMessage[],
+  messages: LineMessage[],
 ): Promise<void> {
   const response = await fetch(LINE_REPLY_URL, {
     method: "POST",
@@ -209,7 +257,7 @@ async function replyLineMessages(
 
 async function pushLineMessages(
   lineUserId: string,
-  messages: LineReplyMessage[],
+  messages: LineMessage[],
 ): Promise<void> {
   const response = await fetch(LINE_PUSH_URL, {
     method: "POST",
@@ -241,6 +289,19 @@ export async function pushLineText(
   await pushLineMessages(lineUserId, [{ type: "text", text }]);
 }
 
+export async function pushLineImage(
+  lineUserId: string,
+  imageUrl: string,
+): Promise<void> {
+  await pushLineMessages(lineUserId, [
+    {
+      type: "image",
+      originalContentUrl: imageUrl,
+      previewImageUrl: imageUrl,
+    },
+  ]);
+}
+
 export async function pushLineNorthConfirmation(
   lineUserId: string,
 ): Promise<void> {
@@ -259,6 +320,18 @@ export async function replyLineMenu(replyToken: string): Promise<void> {
 
 export async function replyLineRoomTypeMenu(replyToken: string): Promise<void> {
   await replyLineMessages(replyToken, [buildLineRoomTypeMessage()]);
+}
+
+export async function replyLineWallTargetMenu(
+  replyToken: string,
+): Promise<void> {
+  await replyLineMessages(replyToken, [buildLineWallTargetMessage()]);
+}
+
+export async function replyLineWallMethodMenu(
+  replyToken: string,
+): Promise<void> {
+  await replyLineMessages(replyToken, [buildLineWallMethodMessage()]);
 }
 
 export async function replyLinePhotoCompletion(

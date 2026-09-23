@@ -16,7 +16,11 @@ export type LineMenuStep =
   | "awaiting_wall_style"
   | "complete";
 
-export type LineIntakeAssetKind = "floorplan" | "wall" | "wallpaper";
+export type LineIntakeAssetKind =
+  | "floorplan"
+  | "wall"
+  | "wallpaper"
+  | "wall_result";
 export const roomTypes = [
   "living_room",
   "bedroom",

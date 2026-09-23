@@ -7,6 +7,8 @@ import {
   buildLinePhotoChangeMessage,
   buildLinePhotoCompletionMessage,
   buildLineRoomTypeMessage,
+  buildLineWallMethodMessage,
+  buildLineWallTargetMessage,
 } from "../lib/line/client";
 import {
   buildLineIntakeObjectKey,
@@ -20,6 +22,12 @@ import {
   parseRoomTypePostback,
   roomTypeLabel,
 } from "../lib/line/menu";
+import {
+  encodeWallImageState,
+  parseWallImageState,
+  parseWallMethodPostback,
+  parseWallTargetPostback,
+} from "../lib/line/wall-image-flow";
 
 test("固定IDのメニューポストバックを解釈する", () => {
   assert.equal(
@@ -118,6 +126,51 @@ test("お部屋の風水は部屋種別を固定IDで選択する", () => {
       "room_type=other",
     ],
   );
+});
+
+test("壁イメージは対象と指定方法をボタンで選ぶ", () => {
+  assert.deepEqual(
+    buildLineWallTargetMessage().quickReply?.items.map(
+      (item) => item.action.data,
+    ),
+    [
+      "wall_target=interior_wall",
+      "wall_target=exterior_wall",
+      "wall_target=front_door",
+    ],
+  );
+  assert.deepEqual(
+    buildLineWallMethodMessage().quickReply?.items.map(
+      (item) => item.action.data,
+    ),
+    ["wall_method=words", "wall_method=reference", "wall_method=ai"],
+  );
+  assert.deepEqual(
+    buildLineWallMethodMessage().quickReply?.items.map(
+      (item) => item.action.label,
+    ),
+    [
+      "言葉でイメージを伝える",
+      "参考画像を送る",
+      "AIに提案してもらう",
+    ],
+  );
+  assert.equal(
+    parseWallTargetPostback("wall_target=front_door"),
+    "front_door",
+  );
+  assert.equal(parseWallMethodPostback("wall_method=reference"), "reference");
+  assert.equal(parseWallMethodPostback("wall_method=unknown"), null);
+});
+
+test("壁イメージの選択状態を往復で保持する", () => {
+  const state = {
+    target: "exterior_wall" as const,
+    method: "words" as const,
+    description: "温かみのあるベージュ",
+  };
+  assert.deepEqual(parseWallImageState(encodeWallImageState(state)), state);
+  assert.deepEqual(parseWallImageState("壊れたJSON"), {});
 });
 
 test("メニューへ戻る自由文を認識する", () => {
