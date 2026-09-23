@@ -26,6 +26,10 @@ import {
   replyLineText,
 } from "@/lib/line/client";
 import {
+  formatLineBuildingAdvice,
+  generateLineBuildingAdvice,
+} from "@/lib/line/building-advice";
+import {
   buildLineIntakeObjectKey,
   buildMenuSelectionMessage,
   isLineMenuOpenPostback,
@@ -707,14 +711,47 @@ export async function POST(request: Request) {
             lineUserId: event.source.userId,
             step: nextStep,
           });
+          if (kind === "floorplan") {
+            try {
+              const report = await generateLineBuildingAdvice(image);
+              await updateLineEventStatus({
+                eventId: event.webhookEventId,
+                status: "processed",
+              });
+              try {
+                await replyLineText(
+                  event.replyToken,
+                  formatLineBuildingAdvice(report),
+                );
+              } catch {
+                console.error("Failed to send LINE building advice");
+              }
+            } catch (error) {
+              await updateLineEventStatus({
+                eventId: event.webhookEventId,
+                status: "error",
+                errorCode: "building_advice_failed",
+              });
+              try {
+                await replyLineText(
+                  event.replyToken,
+                  "間取り図は保存しましたが、診断を完了できませんでした。同じ間取り図をもう一度送ってください。",
+                );
+              } catch {
+                console.error("Failed to send LINE building advice error");
+              }
+              console.error("Failed to generate LINE building advice", {
+                error: error instanceof Error ? error.name : "UnknownError",
+              });
+            }
+            continue;
+          }
           await updateLineEventStatus({
             eventId: event.webhookEventId,
             status: "processed",
           });
           const reply =
-            kind === "floorplan"
-              ? "間取り図を安全に保存しました。建物間取り風水の確認に使用します。"
-              : kind === "wallpaper"
+            kind === "wallpaper"
                 ? "壁紙の画像を安全に保存しました。壁のイメージ作成に使用します。"
                 : "壁の写真を安全に保存しました。\n使いたい壁紙があれば画像をアップしてください。壁紙がなければ、希望する色や雰囲気を文章で送ってください。";
           try {
