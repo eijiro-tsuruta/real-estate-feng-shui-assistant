@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import {
   createProfessionalCase,
   receiveDirectionPhoto,
+  retractLatestDirectionPhoto,
   type PhotoDirection,
   type ProfessionalCase,
 } from "../professional-case";
@@ -26,6 +27,13 @@ const ACTIVE_PHOTO_STATUSES = [
   "awaiting_east_photo",
   "awaiting_south_photo",
   "awaiting_west_photo",
+] as const;
+const CORRECTABLE_PHOTO_STATUSES = [
+  "awaiting_east_photo",
+  "awaiting_south_photo",
+  "awaiting_west_photo",
+  "awaiting_answers",
+  "professional_review",
 ] as const;
 
 function stableCustomerId(lineUserId: string): string {
@@ -102,29 +110,132 @@ export async function saveLinePhotoAsset(args: {
 }): Promise<ProfessionalCase> {
   const db = getDatabase();
   const retainedUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  await db.insert(caseAssets).values({
-    id: args.assetId,
-    caseId: args.professionalCase.id,
-    kind: args.direction,
-    objectKey: args.objectKey,
-    mediaType: args.mediaType,
-    byteSize: args.byteSize,
-    sha256: args.sha256,
-    retainedUntil,
-  });
+  const [existingAsset] = await db
+    .select()
+    .from(caseAssets)
+    .where(
+      and(
+        eq(caseAssets.caseId, args.professionalCase.id),
+        eq(caseAssets.kind, args.direction),
+      ),
+    )
+    .limit(1);
+  const effectiveAssetId = existingAsset?.id ?? args.assetId;
+
+  if (existingAsset) {
+    await db
+      .update(caseAssets)
+      .set({
+        objectKey: args.objectKey,
+        mediaType: args.mediaType,
+        byteSize: args.byteSize,
+        sha256: args.sha256,
+        retainedUntil,
+        deletedAt: null,
+      })
+      .where(eq(caseAssets.id, existingAsset.id));
+  } else {
+    await db.insert(caseAssets).values({
+      id: effectiveAssetId,
+      caseId: args.professionalCase.id,
+      kind: args.direction,
+      objectKey: args.objectKey,
+      mediaType: args.mediaType,
+      byteSize: args.byteSize,
+      sha256: args.sha256,
+      retainedUntil,
+    });
+  }
 
   try {
     const next = receiveDirectionPhoto({
       current: args.professionalCase,
       direction: args.direction,
-      assetId: args.assetId,
+      assetId: effectiveAssetId,
     });
     await saveProfessionalCaseState(next, args.customerId);
     return next;
   } catch (error) {
-    await db.delete(caseAssets).where(eq(caseAssets.id, args.assetId));
+    if (existingAsset) {
+      await db
+        .update(caseAssets)
+        .set({
+          objectKey: existingAsset.objectKey,
+          mediaType: existingAsset.mediaType,
+          byteSize: existingAsset.byteSize,
+          sha256: existingAsset.sha256,
+          retainedUntil: existingAsset.retainedUntil,
+          deletedAt: existingAsset.deletedAt,
+        })
+        .where(eq(caseAssets.id, existingAsset.id));
+    } else {
+      await db.delete(caseAssets).where(eq(caseAssets.id, effectiveAssetId));
+    }
     throw error;
   }
+}
+
+export async function retractLatestLinePhoto(lineUserId: string): Promise<{
+  caseId: string;
+  direction: PhotoDirection;
+  objectKey: string;
+} | null> {
+  const db = getDatabase();
+  const [active] = await db
+    .select({ caseId: cases.id, customerId: customers.id })
+    .from(cases)
+    .innerJoin(customers, eq(cases.customerId, customers.id))
+    .where(
+      and(
+        eq(customers.lineUserId, lineUserId),
+        inArray(cases.status, [...CORRECTABLE_PHOTO_STATUSES]),
+      ),
+    )
+    .orderBy(desc(cases.updatedAt))
+    .limit(1);
+  if (!active) return null;
+
+  const saved = await getProfessionalCaseState(active.caseId);
+  if (!saved) throw new Error("Correctable LINE case could not be loaded.");
+  const retracted = retractLatestDirectionPhoto(saved.professionalCase);
+  if (!retracted) return null;
+
+  const [asset] = await db
+    .select({ id: caseAssets.id, objectKey: caseAssets.objectKey })
+    .from(caseAssets)
+    .where(
+      and(
+        eq(caseAssets.id, retracted.assetId),
+        eq(caseAssets.caseId, active.caseId),
+        isNull(caseAssets.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!asset) throw new Error("The photo selected for retake is unavailable.");
+
+  const deletedAt = new Date();
+  await db
+    .update(caseAssets)
+    .set({ deletedAt })
+    .where(eq(caseAssets.id, asset.id));
+  try {
+    await saveProfessionalCaseState(
+      retracted.professionalCase,
+      active.customerId,
+    );
+  } catch (error) {
+    await db
+      .update(caseAssets)
+      .set({ deletedAt: null })
+      .where(eq(caseAssets.id, asset.id));
+    throw error;
+  }
+
+  return {
+    caseId: active.caseId,
+    direction: retracted.direction,
+    objectKey: asset.objectKey,
+  };
 }
 
 export async function updateLineEventStatus(args: {

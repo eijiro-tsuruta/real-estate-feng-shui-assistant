@@ -4,6 +4,7 @@ import { z } from "zod";
 import { recordLineEvent } from "@/lib/db/line-event-repository";
 import {
   getOrCreateLinePhotoCase,
+  retractLatestLinePhoto,
   saveLinePhotoAsset,
   updateLineEventStatus,
 } from "@/lib/db/line-photo-repository";
@@ -11,6 +12,8 @@ import { fetchLineImage, replyLineText } from "@/lib/line/client";
 import {
   buildLinePhotoObjectKey,
   buildPhotoReceiptMessage,
+  buildPhotoRetakeMessage,
+  isPhotoRetakeCommand,
 } from "@/lib/line/photo-flow";
 import {
   getLineEventMetadata,
@@ -76,6 +79,77 @@ export async function POST(request: Request) {
         payloadSha256,
       });
       if (recorded === "duplicate") continue;
+
+      const isRetake =
+        event.type === "message" &&
+        event.message?.type === "text" &&
+        typeof event.message.text === "string" &&
+        isPhotoRetakeCommand(event.message.text);
+
+      if (
+        isRetake &&
+        event.source?.userId &&
+        event.replyToken
+      ) {
+        await updateLineEventStatus({
+          eventId: event.webhookEventId,
+          status: "processing",
+        });
+        try {
+          const retracted = await retractLatestLinePhoto(event.source.userId);
+          if (retracted) {
+            try {
+              await deletePrivateObject(retracted.objectKey);
+            } catch {
+              console.error("Failed to delete retracted LINE image object");
+            }
+            await updateLineEventStatus({
+              eventId: event.webhookEventId,
+              status: "processed",
+              caseId: retracted.caseId,
+            });
+            try {
+              await replyLineText(
+                event.replyToken,
+                buildPhotoRetakeMessage(retracted.direction),
+              );
+            } catch {
+              console.error("Failed to send LINE retake receipt");
+            }
+          } else {
+            await updateLineEventStatus({
+              eventId: event.webhookEventId,
+              status: "processed",
+            });
+            try {
+              await replyLineText(
+                event.replyToken,
+                "撮り直せる写真がありません。案内されている方角の写真を送ってください。",
+              );
+            } catch {
+              console.error("Failed to send LINE no-retake reply");
+            }
+          }
+        } catch (error) {
+          await updateLineEventStatus({
+            eventId: event.webhookEventId,
+            status: "error",
+            errorCode: "photo_retake_failed",
+          });
+          try {
+            await replyLineText(
+              event.replyToken,
+              "撮り直し処理を完了できませんでした。少し時間をおいて、もう一度「撮り直し」と送ってください。",
+            );
+          } catch {
+            console.error("Failed to send LINE retake error reply");
+          }
+          console.error("Failed to retract LINE image", {
+            error: error instanceof Error ? error.name : "UnknownError",
+          });
+        }
+        continue;
+      }
 
       if (
         event.type !== "message" ||

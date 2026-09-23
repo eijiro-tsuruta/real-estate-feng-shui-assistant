@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { getDatabase } from "./client";
 import { caseAssets, cases, customers } from "./schema";
 import type { PhotoDirection, ProfessionalCase } from "../professional-case";
@@ -62,7 +62,9 @@ export async function getProfessionalCaseState(
   const assets = await db
     .select({ id: caseAssets.id, kind: caseAssets.kind })
     .from(caseAssets)
-    .where(eq(caseAssets.caseId, caseId));
+    .where(
+      and(eq(caseAssets.caseId, caseId), isNull(caseAssets.deletedAt)),
+    );
   const floorPlanAssetId =
     assets.find((asset) => asset.kind === "floorplan")?.id ?? null;
   const photoAssetIds = Object.fromEntries(

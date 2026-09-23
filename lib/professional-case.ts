@@ -205,6 +205,45 @@ export function receiveDirectionPhoto(args: {
   );
 }
 
+export function retractLatestDirectionPhoto(
+  current: ProfessionalCase,
+  now = new Date().toISOString(),
+): {
+  direction: PhotoDirection;
+  assetId: string;
+  professionalCase: ProfessionalCase;
+} | null {
+  if (current.status === "delivered") {
+    throw new Error("納品済みの案件は撮り直しできません。");
+  }
+
+  const direction = [...directionOrder]
+    .reverse()
+    .find((candidate) => current.photoAssetIds[candidate]);
+  if (!direction) return null;
+
+  const assetId = current.photoAssetIds[direction];
+  if (!assetId) return null;
+
+  const photoAssetIds = { ...current.photoAssetIds };
+  delete photoAssetIds[direction];
+
+  return {
+    direction,
+    assetId,
+    professionalCase: withUpdate(
+      current,
+      {
+        photoAssetIds,
+        status: awaitingPhotoStatus(direction),
+        pendingDirection: null,
+        pendingQuestionIds: [],
+      },
+      now,
+    ),
+  };
+}
+
 export function receiveConfirmationAnswers(
   current: ProfessionalCase,
   answeredQuestionIds: string[],

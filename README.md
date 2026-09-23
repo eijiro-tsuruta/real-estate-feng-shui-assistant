@@ -109,3 +109,5 @@ npm run db:check
 Webhook URLは `/api/line/webhook` です。`LINE_CHANNEL_SECRET` を使って、生のリクエスト本文と `x-line-signature` をLINE公式SDKで検証します。検証後は、イベント本文を保存せず、イベントID、ユーザーID、メッセージID、種類、本文全体のSHA-256だけを `line_events` に記録します。
 
 `webhookEventId` が主キーのため、Webhook再送時も二重登録されません。LINE Developers Consoleの接続確認で送られる空イベントにもHTTP 200を返します。画像メッセージはLINEから取得して非公開Object Storageへ保存し、案件の北→東→南→西の状態を進め、保存成功後に次の撮影方向を自動返信します。
+
+写真を間違えた場合は、ユーザーがLINEで「撮り直し」と送ると直前の1枚だけを無効化し、その方角の写真待ちへ戻します。取り消したObject Storage上の画像は削除し、再送された写真で同じ方角の資産情報を更新します。納品済み案件は撮り直せません。

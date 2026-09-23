@@ -15,6 +15,14 @@ const nextDirections: Partial<Record<PhotoDirection, PhotoDirection>> = {
   south: "west",
 };
 
+const retakeCommands = new Set([
+  "撮り直し",
+  "撮り直す",
+  "やり直し",
+  "一つ戻る",
+  "ひとつ戻る",
+]);
+
 export function directionFromCaseStatus(
   status: ProfessionalCase["status"],
 ): PhotoDirection | null {
@@ -44,7 +52,15 @@ export function buildLinePhotoObjectKey(args: {
 export function buildPhotoReceiptMessage(direction: PhotoDirection): string {
   const next = nextDirections[direction];
   if (!next) {
-    return `${directionLabels[direction]}の写真を安全に保存しました。\n4方向の写真が揃いました。担当者の確認後に診断結果をお届けします。`;
+    return `${directionLabels[direction]}の写真を安全に保存しました。\n4方向の写真が揃いました。担当者の確認後に診断結果をお届けします。\n写真を間違えた場合は「撮り直し」と送ってください。`;
   }
-  return `${directionLabels[direction]}の写真を安全に保存しました。\n次は${directionLabels[next]}を撮影して送ってください。`;
+  return `${directionLabels[direction]}の写真を安全に保存しました。\n次は${directionLabels[next]}を撮影して送ってください。\n写真を間違えた場合は「撮り直し」と送ってください。`;
+}
+
+export function isPhotoRetakeCommand(text: string): boolean {
+  return retakeCommands.has(text.normalize("NFKC").trim());
+}
+
+export function buildPhotoRetakeMessage(direction: PhotoDirection): string {
+  return `${directionLabels[direction]}の写真を取り消しました。\n${directionLabels[direction]}をもう一度撮影して送ってください。`;
 }

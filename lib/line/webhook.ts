@@ -15,6 +15,7 @@ const lineMessageSchema = z
   .object({
     id: z.string().min(1).max(100),
     type: z.string().min(1).max(50),
+    text: z.string().max(5000).optional(),
   })
   .passthrough();
 

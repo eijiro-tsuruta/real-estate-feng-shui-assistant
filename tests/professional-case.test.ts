@@ -8,6 +8,7 @@ import {
   receiveConfirmationAnswers,
   receiveDirectionPhoto,
   receiveFloorPlan,
+  retractLatestDirectionPhoto,
 } from "../lib/professional-case";
 
 const now = "2026-09-22T00:00:00.000Z";
@@ -126,4 +127,79 @@ test("順番の違う写真は受け付けない", () => {
       }),
     /待っている状態ではありません/,
   );
+});
+
+test("直前の写真を取り消して同じ方角の待機状態へ戻す", () => {
+  let result = createProfessionalCase({
+    id: "case_7",
+    professionalId: "pro_1",
+    customerLineUserId: "line_7",
+    offering: "renovation",
+    now,
+  });
+  result = receiveDirectionPhoto({
+    current: result,
+    direction: "north",
+    assetId: "asset_north",
+    now,
+  });
+  result = receiveDirectionPhoto({
+    current: result,
+    direction: "east",
+    assetId: "asset_east",
+    now,
+  });
+
+  const retracted = retractLatestDirectionPhoto(result, now);
+  assert.equal(retracted?.direction, "east");
+  assert.equal(retracted?.assetId, "asset_east");
+  assert.equal(retracted?.professionalCase.status, "awaiting_east_photo");
+  assert.deepEqual(retracted?.professionalCase.photoAssetIds, {
+    north: "asset_north",
+  });
+});
+
+test("4方向完了後も納品前なら西側を撮り直せる", () => {
+  let result = createProfessionalCase({
+    id: "case_8",
+    professionalId: "pro_1",
+    customerLineUserId: "line_8",
+    offering: "renovation",
+    now,
+  });
+  for (const direction of ["north", "east", "south", "west"] as const) {
+    result = receiveDirectionPhoto({
+      current: result,
+      direction,
+      assetId: `asset_${direction}`,
+      now,
+    });
+  }
+
+  const retracted = retractLatestDirectionPhoto(result, now);
+  assert.equal(retracted?.direction, "west");
+  assert.equal(retracted?.professionalCase.status, "awaiting_west_photo");
+});
+
+test("写真がない案件は取り消さず、納品後は撮り直せない", () => {
+  const empty = createProfessionalCase({
+    id: "case_9",
+    professionalId: "pro_1",
+    customerLineUserId: "line_9",
+    offering: "renovation",
+    now,
+  });
+  assert.equal(retractLatestDirectionPhoto(empty, now), null);
+
+  let delivered = empty;
+  for (const direction of ["north", "east", "south", "west"] as const) {
+    delivered = receiveDirectionPhoto({
+      current: delivered,
+      direction,
+      assetId: `asset_${direction}`,
+      now,
+    });
+  }
+  delivered = markDelivered(delivered, now);
+  assert.throws(() => retractLatestDirectionPhoto(delivered, now), /納品済み/);
 });
