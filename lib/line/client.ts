@@ -4,6 +4,7 @@ import { roomTypeLabel, roomTypes } from "./menu";
 
 const LINE_CONTENT_BASE_URL = "https://api-data.line.me/v2/bot/message";
 const LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply";
+const LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push";
 
 type LineReplyMessage = {
   type: "text";
@@ -156,12 +157,38 @@ async function replyLineMessages(
   }
 }
 
+async function pushLineMessages(
+  lineUserId: string,
+  messages: LineReplyMessage[],
+): Promise<void> {
+  const response = await fetch(LINE_PUSH_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${getAccessToken()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      to: lineUserId,
+      messages,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`LINE push failed with ${response.status}.`);
+  }
+}
 
 export async function replyLineText(
   replyToken: string,
   text: string,
 ): Promise<void> {
   await replyLineMessages(replyToken, [{ type: "text", text }]);
+}
+
+export async function pushLineText(
+  lineUserId: string,
+  text: string,
+): Promise<void> {
+  await pushLineMessages(lineUserId, [{ type: "text", text }]);
 }
 
 export async function replyLineMenu(replyToken: string): Promise<void> {

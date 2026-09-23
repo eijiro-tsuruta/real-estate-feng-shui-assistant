@@ -19,6 +19,7 @@ import {
 } from "@/lib/db/line-photo-repository";
 import {
   fetchLineImage,
+  pushLineText,
   replyLineMenu,
   replyLinePhotoChangeMenu,
   replyLinePhotoCompletion,
@@ -713,14 +714,22 @@ export async function POST(request: Request) {
           });
           if (kind === "floorplan") {
             try {
+              await replyLineText(
+                event.replyToken,
+                "間取り図を保存しました。現在診断しております。しばらくお待ちください。",
+              );
+            } catch {
+              console.error("Failed to send LINE building advice progress");
+            }
+            try {
               const report = await generateLineBuildingAdvice(image);
               await updateLineEventStatus({
                 eventId: event.webhookEventId,
                 status: "processed",
               });
               try {
-                await replyLineText(
-                  event.replyToken,
+                await pushLineText(
+                  event.source.userId,
                   formatLineBuildingAdvice(report),
                 );
               } catch {
@@ -733,8 +742,8 @@ export async function POST(request: Request) {
                 errorCode: "building_advice_failed",
               });
               try {
-                await replyLineText(
-                  event.replyToken,
+                await pushLineText(
+                  event.source.userId,
                   "間取り図は保存しましたが、診断を完了できませんでした。同じ間取り図をもう一度送ってください。",
                 );
               } catch {
